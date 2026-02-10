@@ -1,0 +1,37 @@
+{
+  "id": "chatcmpl-8c4a117d-c254-4788-b3c1-168ac0ffe269",
+  "object": "chat.completion",
+  "created": 1770583751,
+  "model": "openai/gpt-oss-120b",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "Below is a **self‑contained Python script** that\n\n1. reads your Groq API key from an environment variable (`GROQ_API_KEY`),\n2. sends a request to the Groq completions endpoint,\n3. passes the question you want to ask (just replace the `question` variable), and\n4. prints the model’s answer.\n\nYou can run the script as‑is (after installing the required package) or copy the core request‑logic into your own project.\n\n---\n\n## 1️⃣  Install the dependency\n\n```bash\npip install httpx   # lightweight HTTP client; you could also use `requests`\n```\n\n---\n\n## 2️⃣  Save the script (e.g. `groq_ask.py`)\n\n```python\n#!/usr/bin/env python3\n\"\"\"\nSimple example of calling the Groq API from Python.\n\n- The API key is taken from the environment variable GROQ_API_KEY.\n- Change the `model` variable if you want a different Groq model.\n- Replace the `question` string with the prompt you want to ask.\n\"\"\"\n\nimport os\nimport sys\nimport json\nimport httpx\n\n# ----------------------------------------------------------------------\n# 1️⃣  Configuration\n# ----------------------------------------------------------------------\n # 1.1  Load API key from environment\nAPI_KEY = os.getenv(\"GROQ_API_KEY\")\nif not API_KEY:\n    sys.stderr.write(\n        \"❌  Error: environment variable GROQ_API_KEY is not set.\\n\"\n        \"    Set it with your Groq secret key (e.g. export GROQ_API_KEY=sk-...)\\n\"\n    )\n    sys.exit(1)\n\n# 1.2  Choose the model (see Groq docs for the full list)\nMODEL = \"mixtral-8x7b-32768\"   # \u003c-- change if you need another model\n\n# 1.3  The question / prompt you want to send\nquestion = \"\"\"\\\nCan you explain the difference between supervised and unsupervised learning,\nand give a short example of each?\n\"\"\"\n# ----------------------------------------------------------------------\n\n\ndef call_groq(prompt: str) -\u003e str:\n    \"\"\"\n    Sends a completion request to Groq and returns the assistant's response text.\n    \"\"\"\n    url = \"https://api.groq.com/openai/v1/chat/completions\"\n\n    # The payload follows OpenAI's Chat Completion schema (Groq is compatible)\n    payload = {\n        \"model\": MODEL,\n        \"messages\": [\n            {\"role\": \"system\", \"content\": \"You are a helpful AI assistant.\"},\n            {\"role\": \"user\", \"content\": prompt},\n        ],\n        \"temperature\": 0.7,          # tweak creativity (0.0‑2.0)\n        \"max_tokens\": 1024,          # limit the response length\n         # \"stream\": False,           # you could enable streaming if desired\n    }\n\n    headers = {\n        \"Authorization\": f\"Bearer {API_KEY}\",\n        \"Content-Type\": \"application/json\",\n    }\n\n    # Use a short timeout so the script fails fast if the service is unreachable\n    timeout = httpx.Timeout(30.0, connect=5.0)\n\n    with httpx.Client(timeout=timeout) as client:\n        response = client.post(url, headers=headers, json=payload)\n\n    # Raise an exception for non‑2xx responses – makes debugging easier\n    response.raise_for_status()\n\n    data = response.json()\n    # The response format is the same as OpenAI's Chat API:\n    #   {\"choices\": [{\"message\": {\"role\": \"assistant\", \"content\": \"...\"}}, ...], ...}\n    try:\n        answer = data[\"choices\"][0][\"message\"][\"content\"]\n    except (KeyError, IndexError):\n        raise RuntimeError(\"Unexpected response format:\\n\" + json.dumps(data, indent=2))\n\n    return answer.strip()\n\n\ndef main():\n    try:\n        answer = call_groq(question)\n    except Exception as exc:\n        sys.stderr.write(f\"❌  API call failed: {exc}\\n\")\n        sys.exit(1)\n\n    print(\"\\n--- Answer from Groq ---\\n\")\n    print(answer)\n    print(\"\\n------------------------\\n\")\n\n\nif __name__ == \"__main__\":\n    main()\n```\n\n---\n\n## 3️⃣  Run i t\n\n```bash\n# 1️⃣  Export your Groq secret key (only once per session)\nexport GROQ_API_KEY=sk-...\n\n# 2️⃣  Execute the script\npython groq_ask.py\n```\n\nYou should see something like:\n\n```\n--- Answer from Groq ---\n\nSupervised learning is ...\n...\n\n------------------------\n```\n\n---\n\n## 4️⃣  Tweaking the script\n\n| What you want to change | Where to edit |\n|--------------------------|---------------|\n| **Model**                | `MODEL = \"mixtral-8x7b-32768\"` |\n| **Temperature** (creativity) | `\"temperature\": 0.7` |\n| **Maximum tokens**      | `\"max_tokens\": 1024` |\n| **System prompt** (how the assistant should behave) | The first message in `messages` |\n| **Streaming output**    | Add `\"stream\": True` and handle the streamed chunks (see Groq docs) |\n\n---\n\n### 📚 Where to find more details\n\n- **Groq API reference** – https://docs.groq.com/api-reference/chat/completions\n- **List of available models** – https://docs.groq.com/models\n- **Authentication** – just the Bearer token (`Authorization: Bearer \u003cyour‑key\u003e`)\n\nIf you hit rate‑limits or want to batch many questions, consider adding exponential‑backoff or re‑using an `httpx.AsyncClient` for concurrent calls. Happy coding! 🚀",
+        "reasoning": "We need to respond with Python code that calls Groq API, asks a question (the user  didn't specify the question). Probably we need to include placeholders for API key, model, etc. Provide instructions. Ensure no disallowed content. It's fine.\n\nWe can give a script using requests or httpx. Include environment variable for API key.\n\nLet's respond."
+      },
+      "logprobs": null,
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "queue_time": 0.149784547,
+    "prompt_tokens": 87,
+    "prompt_time": 0.004019207,
+    "completion_tokens": 1281,
+    "completion_time": 2.851299052,
+    "total_tokens": 1368,
+    "total_time": 2.855318259,
+    "completion_tokens_details": {
+      "reasoning_tokens": 72
+    }
+  },
+  "usage_breakdown": null,
+  "system_fingerprint": "fp_fd64f75983",
+  "x_groq": {
+    "id": "req_01kgzg7vnkf58vpyc6xn8cfser",
+    "seed": 1576406671
+  },
+  "service_tier": "on_demand"
+}

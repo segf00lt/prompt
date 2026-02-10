@@ -1,0 +1,28 @@
+{
+  "messages": [
+    {
+      "role": "user",
+      "content": "Say hello please."
+    }
+  ],
+  "model": "openai/gpt-oss-120b",
+  "temperature": 1,
+  "max_completion_tokens": 8192,
+  "top_p": 1,
+  "stream": false,
+  "reasoning_effort": "medium",
+  "stop": null,
+  "tools": [
+    {
+      "type": "function",
+      "function": {
+        "name": "hello",
+        "description": "this function says hello",
+        "parameters": {
+          "type": "object",
+          "properties": {}
+        }
+      }
+    }
+  ]
+}

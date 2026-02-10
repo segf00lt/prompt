@@ -1,0 +1,46 @@
+{
+  "id" : "chatcmpl-9dd72d00-b484-4667-b4ef-7780006e8d94",
+  "object" : "chat.completion",
+  "created" : 1770677530,
+  "model" : "openai/gpt-oss-120b",
+  "choices" : [
+    {
+      "index" : 0,
+      "message" : {
+        "role" : "assistant",
+        "reasoning" : "User: \"Say hello please.\" Likely wants the assistant to say hello. We have a tool hello. Use that.",
+        "tool_calls" : [
+          {
+            "id" : "fc_59d533a3-8359-473b-ade5-2e16f0433ed9",
+            "type" : "function",
+            "function" : {
+              "name" : "hello",
+              "arguments" : "{\"\":{}}"
+            }
+          }
+        ]
+      },
+      "logprobs" : null,
+      "finish_reason" : "tool_calls"
+    }
+  ],
+  "usage" : {
+    "queue_time" : 0.313398623,
+    "prompt_tokens" : 117,
+    "prompt_time" : 0.005464756,
+    "completion_tokens" : 50,
+    "completion_time" : 0.107588228,
+    "total_tokens" : 167,
+    "total_time" : 0.113052984,
+    "completion_tokens_details" : {
+      "reasoning_tokens" : 26
+    }
+  },
+  "usage_breakdown" : null,
+  "system_fingerprint" : "fp_e8236260a9",
+  "x_groq" : {
+    "id" : "req_01kh29nv71fzg8w7q6hqbff3sk",
+    "seed" : 2105933909
+  },
+  "service_tier" : "on_demand"
+}
