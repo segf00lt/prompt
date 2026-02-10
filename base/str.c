@@ -49,7 +49,7 @@ func str8_list_insert_first_str_(Arena *a, Str8_list *list, Str8 str) {
 }
 
 internal void
-func str8_list_append_str_(Arena *a, Str8_list *list, Str8 str) {
+func str8_list_append_str(Arena *a, Str8_list *list, Str8 str) {
   Str8_node *node = push_struct(a, Str8_node);
   node->str = str;
   sll_queue_push(list->first, list->last, node);
@@ -119,6 +119,55 @@ func str8_list_join(Arena *a, Str8_list list, Str8 sep) {
   result.s[len_copied] = 0;
 
   return result;
+}
+
+internal Str8
+func str8_escaped(Arena *a, Str8 str) {
+  Str8 result;
+  u8 *data = push_array_no_zero(a, u8, (str.len + 1) << 1);
+  result.s = data;
+
+  for (s64 i = 0; i < str.len; i++) {
+    switch (str.s[i]) {
+    case '"':
+      *data++ = '\\'; /* escape the control character. */
+      *data++ = '"';
+      break;
+    case '\\':
+      *data++ = '\\'; /* escape the control character. */
+      *data++ = '\\';
+      break;
+    case '\b':
+      *data++ = '\\'; /* escape the control character. */
+      *data++ = 'b';
+      break;
+    case '\f':
+      *data++ = '\\'; /* escape the control character. */
+      *data++ = 'f';
+      break;
+    case '\n':
+      *data++ = '\\'; /* escape the control character. */
+      *data++ = 'n';
+      break;
+    case '\r':
+      *data++ = '\\'; /* escape the control character. */
+      *data++ = 'r';
+      break;
+    case '\t':
+      *data++ = '\\'; /* escape the control character. */
+      *data++ = 't';
+      break;
+    default:
+      *data++ = str.s[i];
+      break;
+    }
+  }
+
+  result.len = (s64)(data - result.s);
+  result.s[result.len] = 0;
+
+  return result;
+
 }
 
 internal Str8

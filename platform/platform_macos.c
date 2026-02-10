@@ -25,6 +25,8 @@ struct Groq_tool {
   Groq_tool_parameter_slice parameters;
 };
 
+TYPEDEF_SLICE(Groq_tool, Groq_tool_array);
+
 typedef struct Groq_tool_call Groq_tool_call;
 struct Groq_tool_call {
   Str8 id;
@@ -54,6 +56,25 @@ global Str8 env_file;
 global Str8 groq_api_key;
 global Str8 prompt_json;
 global Groq_message_array all_messages;
+global Groq_tool_array all_tools;
+global Arena *platform_arena;
+
+
+///////////////////////////
+// headers
+
+internal void* json_arena_push(void *user_data, size_t size);
+
+internal size_t my_curl_write_callback(void *contents, size_t size, size_t nmemb, void *userp);
+
+internal Groq_message create_groq_user_message(Str8 content);
+
+internal void send_all_messages_to_groq(void);
+
+internal Groq_message parse_groq_response_message(Arena *scratch, Str8 groq_response_json, Arena *output_arena);
+
+internal void prompt_loop(void);
+
 
 
 
@@ -83,8 +104,18 @@ func my_curl_write_callback(void *contents, size_t size, size_t nmemb, void *use
   return bytes;
 }
 
+internal Groq_message
+func create_groq_user_message(Str8 content) {
+  Groq_message message = {
+    .role = str8_lit("user"),
+    .content = content,
+  };
+
+  return message;
+}
+
 internal void
-func curl_groq_api(void) {
+func send_all_messages_to_groq(void) {
   CURL *curl = curl_easy_init();
   ASSERT(curl);
 
@@ -96,7 +127,78 @@ func curl_groq_api(void) {
 
   struct curl_slist *headers = 0;
 
-  prompt_json = platform_read_entire_file(arena, "prompt_test.json");
+  Str8 prompt_json = {0};
+  {
+    Str8_list prompt_str_list = {0};
+    Str8_list messages_str_list = {0};
+    Str8_list tools_str_list = {0};
+    Str8 preamble = str8_lit(
+      "{"
+      "\"model\": \"openai/gpt-oss-120b\","
+      "\"temperature\": 1,"
+      "\"max_completion_tokens\": 8192,"
+      "\"top_p\": 1,"
+      "\"stream\": false,"
+      "\"reasoning_effort\": \"medium\","
+      "\"stop\": null,"
+    );
+
+    Str8 end = str8_lit("}");
+
+    Str8 messages_begin = str8_lit("\"messages\": [");
+    Str8 messages_end = str8_lit("],");
+
+    for(s64 i = 0; i < all_messages.count; i++) {
+      Str8 message_str = str8f(arena,
+        "{ \"role\": \"%S\", \"content\": \"%S\" }",
+        all_messages.d[i].role, str8_escaped(arena, all_messages.d[i].content)
+      );
+      str8_list_append_str(arena, &messages_str_list, message_str);
+    }
+
+    Str8 all_messages_json_str = str8_list_join(arena, messages_str_list, str8_lit(","));
+
+    #if 0
+    arena_scope(arena) {
+      printf("all messages: %s\n", cstr_from_str8(arena, all_messages_json_str));
+    }
+    #endif
+
+
+    Str8 tools_begin = str8_lit("\"tools\": [");
+    Str8 tools_end = str8_lit("]"); // NOTE jfd: tools come last
+
+    // for(s64 i = 0; i < all_tools.count; i++) {
+    //   Str8 tool_str = str8f(arena,
+
+    //   );
+    // }
+    Str8 all_tools_json_str = str8_list_join(arena, tools_str_list, str8_lit(","));
+
+
+    str8_list_append_str(arena, &prompt_str_list, preamble);
+    str8_list_append_str(arena, &prompt_str_list, messages_begin);
+    str8_list_append_str(arena, &prompt_str_list, all_messages_json_str);
+    str8_list_append_str(arena, &prompt_str_list, messages_end);
+    str8_list_append_str(arena, &prompt_str_list, tools_begin);
+    str8_list_append_str(arena, &prompt_str_list, all_tools_json_str);
+    str8_list_append_str(arena, &prompt_str_list, tools_end);
+    str8_list_append_str(arena, &prompt_str_list, end);
+
+    prompt_json = str8_list_join(arena, prompt_str_list, (Str8){0});
+
+    #if 0
+    json_value_t *root = json_parse(prompt_json.s, prompt_json.len);
+
+    char *indent = "  ";
+    char *newline = "\n";
+    size_t bytes;
+    char *pretty = json_write_pretty(root, indent, newline, &bytes);
+
+    printf("prompt_json:\n%s\n", pretty);
+    #endif
+
+  }
 
   arena_scope(arena) {
     curl_easy_setopt(curl, CURLOPT_URL, "https://api.groq.com/openai/v1/chat/completions");
@@ -118,8 +220,13 @@ func curl_groq_api(void) {
     printf("curl command failed with error: %d\n", res);
   }
 
-  Str8 curl_response = str8_list_join(arena, write_buffer.chunks, str8_lit("\n"));
+  Str8 curl_response = str8_list_join(arena, write_buffer.chunks, str8_lit(""));
 
+  Groq_message response_message = parse_groq_response_message(arena, curl_response, platform_arena);
+
+  arr_push(all_messages, response_message);
+
+  #if 0
   json_value_t *root = json_parse(curl_response.s, curl_response.len);
 
   Str8 pretty;
@@ -129,6 +236,7 @@ func curl_groq_api(void) {
   pretty.len--;
 
   platform_write_entire_file(pretty, "output.json");
+  #endif
 
   arena_destroy(arena);
 
@@ -146,13 +254,16 @@ func parse_groq_response_message(Arena *scratch, Str8 groq_response_json, Arena 
 
   Groq_message groq_response_message = {0};
 
+  platform_write_entire_file(groq_response_json, "output_test.json");
+
+  json_parse_result_t parse_result;
   json_value_t *root = json_parse_ex(
     groq_response_json.s,
     groq_response_json.len,
-    0,
+    json_parse_flags_allow_json5,
     json_arena_push,
     (void*)scratch,
-    0
+    &parse_result
   );
 
   json_object_t *object = json_value_as_object(root);
@@ -317,12 +428,12 @@ func parse_groq_response_message(Arena *scratch, Str8 groq_response_json, Arena 
       break; // NOTE jfd: once we've parsed choices[]
 
     } else if(str8_match_lit("model", key_str)) {
-      json_string_t *val_str = json_value_as_string(val);
-      printf("model: %s\n", val_str->string);
+      // json_string_t *val_str = json_value_as_string(val);
+      // printf("model: %s\n", val_str->string);
 
     } else if(str8_match_lit("id", key_str)) {
-      json_string_t *val_str = json_value_as_string(val);
-      printf("id: %s\n", val_str->string);
+      // json_string_t *val_str = json_value_as_string(val);
+      // printf("id: %s\n", val_str->string);
 
     }
 
@@ -333,6 +444,87 @@ func parse_groq_response_message(Arena *scratch, Str8 groq_response_json, Arena 
 
   return groq_response_message;
 }
+
+
+internal void
+func prompt_loop(void) {
+  Arena *prompt_arena = arena_create(LINENOISE_MAX_LINE);
+
+  for(;;) {
+    char *line = linenoise("prompt> ");
+
+    if(line) {
+
+      Str8 content = str8_from_cstr(prompt_arena, line);
+
+      Groq_message user_message = create_groq_user_message(content);
+
+      arr_push(all_messages, user_message);
+
+      send_all_messages_to_groq();
+
+      printf("model response:\n\n%s\n\n", cstr_from_str8(prompt_arena, arr_last(all_messages).content));
+
+      linenoiseFree(line);
+
+    } else {
+      break;
+    }
+
+    arena_clear(prompt_arena);
+  }
+
+}
+
+
+int main(void) {
+
+  #if 0
+  u64 platform_page_size = platform_macos_get_page_size();
+
+  u64 platform_arena_page_count = 10;
+  u64 platform_arena_bytes = platform_arena_page_count * platform_page_size;
+
+  void *platform_memory_block = platform_macos_debug_alloc_memory_block(platform_arena_page_count);
+
+  platform_arena = arena_create_ex(platform_arena_bytes, 1, platform_memory_block);
+  #else
+
+  platform_arena = arena_create_ex(MB(5), 0, 0);
+
+  #endif
+
+  env_file = platform_read_entire_file(platform_arena, "./env");
+
+  groq_api_key = str8_strip_whitespace(str8_slice(env_file, str8_find_char(env_file, '=') + 1, -1));
+
+  {
+
+    arr_init_ex(all_messages, platform_arena, 300);
+
+    // Arena *response_message_output_arena = arena_create_ex(KB(500), 0, 0);
+    // Str8 groq_response_message_json = platform_read_entire_file(platform_arena, "output.json");
+
+
+    // HERE
+    // TODO jfd:
+    // - DONE Basic prompt interface
+    // - DONE Send all_messages and all_tools in POST to groq api
+    // - Generate array of tools immediate mode style
+    // - Process tool calls and return results in all_messages
+
+    // Groq_message message = parse_groq_response_message(platform_arena, groq_response_message_json, response_message_output_arena);
+    // arr_push(all_messages, message);
+
+    // printf("all messages count: %ld\n", all_messages.count);
+
+    prompt_loop();
+
+  }
+
+  return 0;
+}
+
 
 internal u64
 func platform_macos_get_page_size(void) {
@@ -381,57 +573,6 @@ func platform_macos_debug_alloc_memory_block(u64 page_count) {
 
   return (u8*)(void*)base;
 }
-
-
-
-int main(void) {
-
-  #if 0
-  u64 platform_page_size = platform_macos_get_page_size();
-
-  u64 platform_arena_page_count = 10;
-  u64 platform_arena_bytes = platform_arena_page_count * platform_page_size;
-
-  void *platform_memory_block = platform_macos_debug_alloc_memory_block(platform_arena_page_count);
-
-  Arena *platform_arena = arena_create_ex(platform_arena_bytes, 1, platform_memory_block);
-  #else
-
-  Arena *platform_arena = arena_create_ex(MB(5), 0, 0);
-
-  #endif
-
-  env_file = platform_read_entire_file(platform_arena, "./env");
-
-  arena_scope(platform_arena) {
-    printf("env_file contents:\n%s", cstr_from_str8(platform_arena, env_file));
-  }
-
-  groq_api_key = str8_strip_whitespace(str8_slice(env_file, str8_find_char(env_file, '=') + 1, -1));
-
-  arena_scope(platform_arena) {
-    printf("groq_api_key: %s\n", cstr_from_str8(platform_arena, groq_api_key));
-  }
-
-  {
-
-    arr_init_ex(all_messages, platform_arena, 300);
-
-    Arena *response_message_output_arena = arena_create_ex(KB(500), 0, 0);
-    Str8 groq_response_message_json = platform_read_entire_file(platform_arena, "output.json");
-
-    // test_curl();
-
-    Groq_message message = parse_groq_response_message(platform_arena, groq_response_message_json, response_message_output_arena);
-    arr_push(all_messages, message);
-
-    printf("all messages count: %ld\n", all_messages.count);
-
-  }
-
-  return 0;
-}
-
 
 
 internal void*

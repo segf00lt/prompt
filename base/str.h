@@ -50,6 +50,8 @@ internal Str8_find_results str8_find_all(Arena *scratch, Str8 haystack, Str8 nee
 
 internal Str8 str8_cat(Arena *a, Str8 str1, Str8 str2);
 
+internal Str8 str8_escaped(Arena *a, Str8 str);
+
 internal b32 str8_is_cident(Str8 str);
 internal b32 str8_is_alpha(Str8 str);
 internal b32 str8_is_numeric(Str8 str, int base);
@@ -95,8 +97,7 @@ internal Str8 str8_chop_last_slash(Str8 str);
 #define str8_list_append_node(list, node) str8_list_append_node_(&(list), node)
 internal void str8_list_append_node_(Str8_list *list, Str8_node *node);
 
-#define str8_list_append_str(a, list, str) str8_list_append_str_(a, list, str)
-internal void str8_list_append_str_(Arena *a, Str8_list *list, Str8 str);
+internal void str8_list_append_str(Arena *a, Str8_list *list, Str8 str);
 
 internal Str8 str8_list_join(Arena *a, Str8_list list, Str8 sep);
 
