@@ -102,8 +102,4 @@ internal void* arr_push_no_zero_(__Arr_header *arr, s64 stride, s64 push_count);
 
 internal void  slice_init_(__Slice_header *slice, Arena *arena, s64 stride, s64 count);
 
-internal u64 hash_key(Str8 key);
-internal s64 arr_dict_put_(__Arr_header *dict_array, u64 stride, u64 key_offset, Str8 new_key);
-internal s64 arr_dict_get_(__Arr_header *dict_array, u64 stride, u64 key_offset, Str8 key);
-
 #endif

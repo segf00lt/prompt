@@ -1,6 +1,7 @@
 #ifndef PROMPT_H
 #define PROMPT_H
 
+typedef struct App App;
 
 typedef struct Curl_write_buffer Curl_write_buffer;
 struct Curl_write_buffer {
@@ -8,21 +9,40 @@ struct Curl_write_buffer {
   Str8_list chunks;
 };
 
+TYPEDEF_SLICE(Str8, Str8_slice);
+TYPEDEF_ARRAY(Str8, Str8_array);
+
+typedef enum Groq_tool_parameter_type {
+  GROQ_TOOL_PARAM_NONE = 0,
+  GROQ_TOOL_PARAM_NUMBER,
+  GROQ_TOOL_PARAM_INTEGER,
+  GROQ_TOOL_PARAM_BOOLEAN,
+  GROQ_TOOL_PARAM_STRING,
+  GROQ_TOOL_PARAM_ARRAY,
+  GROQ_TOOL_PARAM_OBJECT,
+} Groq_tool_parameter_type;
 
 typedef struct Groq_tool_parameter Groq_tool_parameter;
 struct Groq_tool_parameter {
+  Groq_tool_parameter_type param_type;
   Str8 name;
-  Str8 type; // NOTE jfd: change this to an enum
   Str8 description;
+  Str8_slice accepted_string_values;
+  s64 minimum_value;
+  s64 maximum_value;
+  b32 is_optional;
 };
 
 TYPEDEF_SLICE(Groq_tool_parameter, Groq_tool_parameter_slice);
+
+typedef void (*Tool_callback)(App *, json_value_t *);
 
 typedef struct Groq_tool Groq_tool;
 struct Groq_tool {
   Str8 name;
   Str8 description;
   Groq_tool_parameter_slice parameters;
+  Tool_callback callback;
 };
 STATIC_ASSERT(sizeof(Groq_tool) <= 64, groq_tool_is_less_than_64_bytes);
 #define GROQ_TOOL_SIZE ((u64)96)
@@ -33,7 +53,7 @@ typedef struct Groq_tool_call Groq_tool_call;
 struct Groq_tool_call {
   Str8 id;
   Str8 tool_name; // NOTE jfd: corresponds to function.name in the json
-  json_value_t *arguments_json;
+  json_value_t *parameters;
 };
 
 TYPEDEF_SLICE(Groq_tool_call, Groq_tool_call_slice);
@@ -60,7 +80,6 @@ TYPEDEF_ARRAY(Groq_message, Groq_message_array);
 typedef u64 App_flags;
 #define APP_FLAG_QUIT ((App_flags)(1ul << 0))
 
-typedef struct App App;
 struct App {
   App_flags flags;
 
@@ -91,6 +110,7 @@ internal void send_all_messages_to_groq(App *ap);
 internal void app_update_and_render(App *ap);
 
 
+internal void create_tool_hello(App *ap);
 
 
 #endif

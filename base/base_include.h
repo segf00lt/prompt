@@ -8,8 +8,8 @@
 #ifndef BASE_CORE_ONLY
 
 #include "arena.h"
-#include "str.h"
 #include "array.h"
+#include "str.h"
 
 #include "math.h"
 

@@ -32,8 +32,9 @@ int main(void) {
   // TODO jfd:
   // - DONE Basic prompt interface
   // - DONE Send all_messages and all_tools in POST to groq api
-  // - Generate array of tools immediate mode style
-  // - Process tool calls and return results in all_messages
+  // - DONE Generate array of tools immediate mode style
+  // - DONE Process tool calls
+  // - return tool call results to model in all_messages
 
 
   for(;;) {
