@@ -96,9 +96,10 @@ int macos_build(void) {
     // "-no-pie",
     "-O0",
     // "-pthread",
+    "-fsanitize=address",
     "-o",
     "prompt",
-    "prompt.c",
+    "prompt_build.c",
     "-lcurl",
   );
 

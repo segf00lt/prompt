@@ -50,8 +50,9 @@ struct name {                 \
 #define arr_stride(array) ((s64)sizeof(*((array).d)))
 #define arr_ptr_stride(array) ((s64)sizeof(*((array)->d)))
 
-#define arr_init(array, arena) arr_init_(header_ptr_from_arr((array)), arena, arr_stride(array), ARRAY_DEFAULT_CAP)
-#define arr_init_ex(array, arena, cap) arr_init_(header_ptr_from_arr((array)), arena, arr_stride(array), (cap))
+#define arr_init(array, arena) arr_init_(header_ptr_from_arr((array)), (arena), arr_stride(array), ARRAY_DEFAULT_CAP)
+#define arr_init_ex(array, arena, cap) arr_init_(header_ptr_from_arr((array)), (arena), arr_stride(array), (cap))
+#define arr_init_pro(array, arena, cap, stride) arr_init_(header_ptr_from_arr((array)), (arena), (stride), (cap))
 
 #define dict_init(dict, arena) dict_init_ex(dict, arena, DICT_DEFAULT_CAP)
 #define dict_init_ex(dict, arena, cap) (memory_zero(&((dict).nil_item), sizeof(*&(dict).nil_item)), arr_init_(header_ptr_from_arr((dict)), arena, dict_stride(dict), cap))
