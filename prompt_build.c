@@ -4,6 +4,9 @@
 #include "third_party/json/json.h"
 #include "third_party/linenoise/linenoise.h"
 
+#include <curl/curl.h>
+
+
 #include "prompt.h"
 
 #include "platform/platform_include.h"

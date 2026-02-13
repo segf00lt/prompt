@@ -72,6 +72,11 @@ internal Str8 str8_to_lower(Arena *a, Str8 str);
 
 internal Str8 str8_slice(Str8 str, s64 begin, s64 end);
 
+internal Str8 str8_get_line(Str8 str, s64 start_pos);
+
+internal Str8 str8_get_line_no_strip(Str8 str, s64 start_pos);
+internal Str8 str8_strip_whitespace(Str8 str);
+
 #define is_space(c) (!!('\0' <= (c) && (c) <= ' '))
 #define is_upper(c) (!!('A' <= (c) && (c) <= 'Z'))
 #define is_lower(c) (!!('a' <= (c) && (c) <= 'z'))

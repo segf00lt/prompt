@@ -44,7 +44,7 @@ func push_groq_user_message(App *ap, Str8 content) {
 
 internal void
 func send_all_messages_to_groq(App *ap) {
-  CURL *curl = curl_easy_init();
+  CURL *curl = ap->curl;
   ASSERT(curl);
 
   Curl_write_buffer write_buffer = {
@@ -75,10 +75,21 @@ func send_all_messages_to_groq(App *ap) {
     Str8 messages_end = str8_lit("],");
 
     for(s64 i = 0; i < ap->all_messages.count; i++) {
-      Str8 message_str = str8f(ap->frame_arena,
-        "{ \"role\": \"%S\", \"content\": \"%S\" }",
-        ap->all_messages.d[i].role, str8_escaped(ap->frame_arena, ap->all_messages.d[i].content)
-      );
+      Groq_message message = ap->all_messages.d[i];
+      Str8 message_str = {0};
+
+      if(str8_match_lit("tool", message.role)) {
+        message_str = str8f(ap->frame_arena,
+          "{ \"role\": \"%S\", \"content\": \"%S\", \"name\": \"%S\", \"tool_call_id\": \"%S\" }",
+          message.role, str8_escaped(ap->frame_arena, message.content), message.name, message.tool_call_id
+        );
+      } else {
+        message_str = str8f(ap->frame_arena,
+          "{ \"role\": \"%S\", \"content\": \"%S\" }",
+          message.role, str8_escaped(ap->frame_arena, message.content)
+        );
+      }
+
       str8_list_append_str(ap->frame_arena, &messages_str_list, message_str);
     }
 
@@ -154,7 +165,7 @@ func send_all_messages_to_groq(App *ap) {
         "\"name\": \"%S\", \"description\": \"%S\","
         "\"parameters\": { \"type\": \"object\", \"properties\": { %S }, \"required\": [ \"%S\" ] }"
         "} }",
-        tool.name, str8_escaped(ap->frame_arena, tool.description), tool_params_json, required_params_json
+        TOOL_NAME_STR[tool.name], str8_escaped(ap->frame_arena, tool.description), tool_params_json, required_params_json
       );
       str8_list_append_str(ap->frame_arena, &tools_str_list, tool_str);
 
@@ -212,7 +223,7 @@ func send_all_messages_to_groq(App *ap) {
     );
 
     headers = curl_slist_append(headers, "Content-Type: application/json");
-    headers = curl_slist_append(headers, cstrf(ap->frame_arena, "Authorization: Bearer %S", ap->groq_api_key));
+    headers = curl_slist_append(headers, cstrf(ap->frame_arena, "Authorization: Bearer %S", ap->env[ENV_GROQ_API_KEY]));
 
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
   }
@@ -242,10 +253,8 @@ func send_all_messages_to_groq(App *ap) {
 
 
 
-  // curl_slist_free_all(headers);
-  // curl_easy_cleanup(curl);
+  curl_slist_free_all(headers);
 
-  // printf("curl result = %d\n", res == CURLE_OK);
 }
 
 internal void
@@ -473,48 +482,58 @@ func push_groq_model_response_message(App *ap, Str8 groq_response_json) {
 
 }
 
-internal void
-func say_hello(App *ap, json_value_t *arguments) {
-  json_object_t *args_object = json_value_as_object(arguments);
 
-  for(json_object_element_t *elem = args_object->start; elem; elem = elem->next) {
-    Str8 key = str8_from_cstr(ap->temp_arena, (char*)elem->name->string);
-    if(str8_match_lit("user_name", key)) {
-      json_string_t *val = json_value_as_string(elem->value);
-      if(val) {
-        Str8 user_name = str8_from_cstr(ap->temp_arena, (char*)val->string);
-        printf("say_hello: Hello there, %s!\n", cstr_from_str8(ap->temp_arena, user_name));
-      } else {
-        printf("bad parameter to say_hello\n");
-      }
+internal void
+func load_tools(App *ap) {
+  arr_init_ex(ap->all_tools, ap->main_arena, TOOL_COUNT);
+  ap->all_tools.count = TOOL_COUNT;
+  Groq_tool *all_tools = ap->all_tools.d;
+
+  for(Tool_name tool_name = 0; tool_name < TOOL_COUNT; tool_name++) {
+    switch(tool_name) {
+      default:
+      UNREACHABLE;
+      break;
+
+      case TOOL_SAY_HELLO: {
+        Groq_tool *tool = &all_tools[tool_name];
+
+        tool->name = tool_name;
+        tool->description = str8_lit("This tool prints \"hello\" to the user.");
+        Groq_tool_parameter parameters[] = {
+          {
+            .param_type = GROQ_TOOL_PARAM_STRING,
+            .name = str8_lit("user_name"),
+            .description = str8_lit("The name of the user to say \"hello\" to. Ask if you don't know."),
+          },
+        };
+
+        slice_init(tool->parameters, ARRLEN(parameters), ap->main_arena);
+        memory_copy(tool->parameters.d, parameters, sizeof(parameters));
+
+      } break;
+
+      case TOOL_SAY_GOODBYE: {
+
+        Groq_tool *tool = &all_tools[tool_name];
+
+        tool->name = tool_name;
+        tool->description = str8_lit("This tool prints \"goodbye\" to the user.");
+        Groq_tool_parameter parameters[] = {
+          {
+            .param_type = GROQ_TOOL_PARAM_STRING,
+            .name = str8_lit("user_name"),
+            .description = str8_lit("The name of the user to say \"goodbye\" to. Ask if you don't know."),
+          },
+        };
+
+        slice_init(tool->parameters, ARRLEN(parameters), ap->main_arena);
+        memory_copy(tool->parameters.d, parameters, sizeof(parameters));
+
+      } break;
+
     }
   }
-
-  arena_clear(ap->temp_arena);
-}
-
-internal void
-func create_tool_hello(App *ap) {
-
-  Groq_tool hello_tool;
-  hello_tool.name = str8_lit("hello");
-  hello_tool.description = str8_lit("This tool prints \"hello\" to the user.");
-  hello_tool.callback = say_hello;
-
-  s64 n_params = 1;
-  slice_init(hello_tool.parameters, n_params, ap->main_arena);
-
-  s64 i = 0;
-
-  hello_tool.parameters.d[i] = (Groq_tool_parameter) {
-    .param_type = GROQ_TOOL_PARAM_STRING,
-    .name = str8_lit("user_name"),
-    .description = str8_lit("The name of the user to say \"hello\" to. Ask if you don't know."),
-  };
-  i++;
-
-  arr_push(ap->all_tools, hello_tool);
-
 }
 
 internal void
@@ -525,16 +544,75 @@ func exec_tool_calls(App *ap, Groq_message message) {
     Groq_tool_call tool_call = tool_calls.d[i];
 
     b32 called = false;
-    for(s64 i = 0; i < ap->all_tools.count; i++) {
-      Groq_tool tool = ap->all_tools.d[i];
-      if(str8_match(tool_call.tool_name, tool.name)) {
+    for(Tool_name tool_name = 0; tool_name < TOOL_COUNT && !called; tool_name++) {
+      if(str8_match(TOOL_NAME_STR[tool_name], tool_call.tool_name)) {
         called = true;
 
-        tool.callback(ap, tool_call.parameters);
+        Groq_message result = {
+          .role = str8_lit("tool"),
+          .tool_call_id = tool_call.id,
+          .name = TOOL_NAME_STR[tool_name],
+        };
+
+        switch(tool_name) {
+          default:
+          UNREACHABLE;
+          break;
+
+          case TOOL_SAY_HELLO: {
+
+            json_object_t *args_object = json_value_as_object(tool_call.parameters);
+
+            for(json_object_element_t *elem = args_object->start; elem; elem = elem->next) {
+              Str8 key = str8_from_cstr(ap->temp_arena, (char*)elem->name->string);
+              if(str8_match_lit("user_name", key)) {
+                json_string_t *val = json_value_as_string(elem->value);
+                if(val) {
+                  result.content = str8f(ap->main_arena, "Hello there, %s!", val->string);
+                } else {
+                  result.content = str8_lit("bad 'user_name' parameter\n");
+                }
+              }
+            }
+
+
+          } break;
+
+          case TOOL_SAY_GOODBYE: {
+
+
+            json_object_t *args_object = json_value_as_object(tool_call.parameters);
+
+            for(json_object_element_t *elem = args_object->start; elem; elem = elem->next) {
+              Str8 key = str8_from_cstr(ap->temp_arena, (char*)elem->name->string);
+              if(str8_match_lit("user_name", key)) {
+                json_string_t *val = json_value_as_string(elem->value);
+                if(val) {
+                  result.content = str8f(ap->main_arena, "Goodbye, %s!", val->string);
+                } else {
+                  result.content = str8_lit("bad 'user_name' parameter\n");
+                }
+              }
+            }
+
+          } break;
+
+        }
+
+        arr_push(ap->all_messages, result);
 
       }
     }
 
+    if(!called) {
+      Groq_message result = {
+        .role = str8_lit("assistant"),
+        .content = str8f(ap->main_arena, "error: the requested tool '%S' is not available", tool_call.tool_name),
+      };
+      arr_push(ap->all_messages, result);
+    }
+
+    #if 0
     if(called) {
       printf("model called tool '%s'.\n", cstr_from_str8(ap->temp_arena, tool_call.tool_name));
       arena_clear(ap->temp_arena);
@@ -542,6 +620,42 @@ func exec_tool_calls(App *ap, Groq_message message) {
       printf("model called tool '%s', but it doesn't exist\n", cstr_from_str8(ap->temp_arena, tool_call.tool_name));
       arena_clear(ap->temp_arena);
     }
+    #endif
+
+  }
+
+}
+
+
+internal void
+func parse_env_file(Str8 env_file, Str8 *env_dest, Str8 *env_var_str, int env_count) {
+
+  for(s64 pos = 0; pos < env_file.len;) {
+    Str8 cur_line = str8_get_line_no_strip(env_file, pos);
+    pos += cur_line.len;
+    cur_line = str8_strip_whitespace(cur_line);
+
+    if(cur_line.len == 0) {
+      pos++;
+      continue;
+    }
+
+    if(cur_line.s[0] == '#') {
+      continue;
+    }
+
+    s64 equals_pos = str8_find_char(cur_line, '=');
+
+    Str8 env_var_name = str8_strip_whitespace(str8_slice(cur_line, 0, equals_pos));
+    Str8 env_var_value = str8_strip_whitespace(str8_slice(cur_line, equals_pos + 1, -1));
+
+    for(int var = 0; var < ENV_COUNT; var++) {
+      if(str8_match(env_var_name, env_var_str[var])) {
+        env_dest[var] = env_var_value;
+        break;
+      }
+    }
+
   }
 
 }
@@ -557,12 +671,20 @@ func app_init(void) {
   ap->temp_arena  = arena_create_ex(MB(1), 0, 0);
 
   arr_init_ex(ap->all_messages, ap->main_arena, 1000);
-  arr_init_ex(ap->all_tools, ap->main_arena, 100);
+
+  ap->curl = curl_easy_init();
 
   ap->env_file = platform_read_entire_file(ap->main_arena, "./env");
-  ap->groq_api_key = str8_strip_whitespace(str8_slice(ap->env_file, str8_find_char(ap->env_file, '=') + 1, -1));
+  parse_env_file(ap->env_file, ap->env, ENV_VAR_STR, ENV_COUNT);
 
-  create_tool_hello(ap);
+  #if 0
+  for(int var = 0; var < ENV_COUNT; var++) {
+    printf("%s = %s\n", ENV_VAR_CSTR[var], cstr_from_str8(ap->temp_arena, ap->env[var]));
+  }
+  arena_clear(ap->temp_arena);
+  #endif
+
+  load_tools(ap);
 
   return ap;
 }
@@ -586,16 +708,18 @@ func app_update_and_render(App *ap) {
 
     if(response.tool_calls.count > 0) {
       exec_tool_calls(ap, response);
-    }
-
-    if(response.flags & GROQ_MESSAGE_FLAG_ERROR) {
-      printf("error:\n\n%s\n\n", cstr_from_str8(ap->frame_arena, response.content));
+      Groq_message tool_result = arr_last(ap->all_messages);
+      printf("tool call result:\n\n%s\n\n", cstr_from_str8(ap->frame_arena, tool_result.content));
     } else {
       if(response.content.len > 0) {
         printf("model response:\n\n%s\n\n", cstr_from_str8(ap->frame_arena, response.content));
       } else {
         printf("model didn't reply.\n");
       }
+    }
+
+    if(response.flags & GROQ_MESSAGE_FLAG_ERROR) {
+      printf("error:\n\n%s\n\n", cstr_from_str8(ap->frame_arena, response.content));
     }
 
 

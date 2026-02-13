@@ -49,3 +49,7 @@ macos_virtual_memory_test
 *.state
 prompt
 *env*
+curl_response.json
+output_test.json
+prompt_log.json
+prompt_log_1.json

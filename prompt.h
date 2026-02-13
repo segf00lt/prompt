@@ -1,7 +1,56 @@
 #ifndef PROMPT_H
 #define PROMPT_H
 
-typedef struct App App;
+#define ENV_VARS \
+X(GROQ_API_KEY) \
+X(COHERE_API_KEY) \
+
+typedef enum Env_var {
+  ENV_NONE = -1,
+  #define X(x) ENV_##x,
+  ENV_VARS
+  #undef X
+  ENV_COUNT,
+} Env_var;
+
+global read_only Str8 ENV_VAR_STR[ENV_COUNT] = {
+  #define X(x) str8_lit(#x),
+  ENV_VARS
+  #undef X
+};
+
+global read_only char *ENV_VAR_CSTR[ENV_COUNT] = {
+  #define X(x) #x,
+  ENV_VARS
+  #undef X
+};
+
+
+#define TOOLS \
+X(SAY_HELLO) \
+X(SAY_GOODBYE) \
+
+typedef enum Tool_name {
+  TOOL_NONE = -1,
+  #define X(x) TOOL_##x,
+  TOOLS
+  #undef X
+  TOOL_COUNT,
+} Tool_name;
+
+global read_only Str8 TOOL_NAME_STR[TOOL_COUNT] = {
+  #define X(x) str8_lit(#x),
+  TOOLS
+  #undef X
+};
+
+global read_only char *TOOL_NAME_CSTR[TOOL_COUNT] = {
+  #define X(x) #x,
+  TOOLS
+  #undef X
+};
+
+
 
 typedef struct Curl_write_buffer Curl_write_buffer;
 struct Curl_write_buffer {
@@ -9,8 +58,8 @@ struct Curl_write_buffer {
   Str8_list chunks;
 };
 
-TYPEDEF_SLICE(Str8, Str8_slice);
-TYPEDEF_ARRAY(Str8, Str8_array);
+TYPEDEF_SLICE(Str8);
+TYPEDEF_ARRAY(Str8);
 
 typedef enum Groq_tool_parameter_type {
   GROQ_TOOL_PARAM_NONE = 0,
@@ -33,30 +82,27 @@ struct Groq_tool_parameter {
   b32 is_optional;
 };
 
-TYPEDEF_SLICE(Groq_tool_parameter, Groq_tool_parameter_slice);
-
-typedef void (*Tool_callback)(App *, json_value_t *);
+TYPEDEF_SLICE(Groq_tool_parameter);
 
 typedef struct Groq_tool Groq_tool;
 struct Groq_tool {
-  Str8 name;
+  Tool_name name;
   Str8 description;
   Groq_tool_parameter_slice parameters;
-  Tool_callback callback;
 };
 STATIC_ASSERT(sizeof(Groq_tool) <= 64, groq_tool_is_less_than_64_bytes);
 #define GROQ_TOOL_SIZE ((u64)96)
 
-TYPEDEF_SLICE(Groq_tool, Groq_tool_array);
+TYPEDEF_ARRAY(Groq_tool);
 
 typedef struct Groq_tool_call Groq_tool_call;
 struct Groq_tool_call {
   Str8 id;
-  Str8 tool_name; // NOTE jfd: corresponds to function.name in the json
+  Str8 tool_name;
   json_value_t *parameters;
 };
 
-TYPEDEF_SLICE(Groq_tool_call, Groq_tool_call_slice);
+TYPEDEF_SLICE(Groq_tool_call);
 
 typedef u64 Groq_message_flags;
 #define GROQ_MESSAGE_FLAG_ERROR ((Groq_message_flags)(1ul << 0))
@@ -68,18 +114,20 @@ struct Groq_message {
   Str8 role;
   Str8 content;
   Str8 reasoning;
+  Str8 tool_call_id;
   Groq_tool_call_slice tool_calls;
 };
-STATIC_ASSERT(sizeof(Groq_message) <= 96, groq_message_is_less_than_96_bytes);
-#define GROQ_MESSAGE_SIZE ((u64)96)
+STATIC_ASSERT(sizeof(Groq_message) <= 128, groq_message_is_less_than_96_bytes);
+#define GROQ_MESSAGE_SIZE ((u64)128)
 
 
-TYPEDEF_ARRAY(Groq_message, Groq_message_array);
+TYPEDEF_ARRAY(Groq_message);
 
 
 typedef u64 App_flags;
 #define APP_FLAG_QUIT ((App_flags)(1ul << 0))
 
+typedef struct App App;
 struct App {
   App_flags flags;
 
@@ -87,15 +135,19 @@ struct App {
   Arena *frame_arena;
   Arena *temp_arena;
 
+  CURL *curl;
+
   Str8 env_file;
-  Str8 groq_api_key;
   Groq_message_array all_messages;
   Groq_tool_array all_tools;
+
+  Str8 env[ENV_COUNT];
 
 };
 STATIC_ASSERT(sizeof(App) <= MB(1), app_state_is_less_than_a_megabyte);
 #define APP_STATE_SIZE ((u64)MB(1))
 
+internal void parse_env_file(Str8 env_file, Str8 *env_dest, Str8 *env_var_str, int env_count);
 
 internal void* json_arena_push(void *user_data, size_t size);
 

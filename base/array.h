@@ -16,7 +16,8 @@ struct __Slice_header {
   s64 count;
 };
 
-#define TYPEDEF_ARRAY(T, name) \
+
+#define TYPEDEF_ARRAY_NAME(T, name) \
 typedef struct name name; \
 struct name {                 \
   T *d;                           \
@@ -25,12 +26,15 @@ struct name {                 \
   Arena *arena;                   \
 };                                \
 
-#define TYPEDEF_SLICE(T, name) \
+#define TYPEDEF_SLICE_NAME(T, name) \
 typedef struct name name; \
 struct name {                 \
   T *d;                           \
   s64 count;                      \
 };                                \
+
+#define TYPEDEF_ARRAY(T) TYPEDEF_ARRAY_NAME(T, T##_array)
+#define TYPEDEF_SLICE(T) TYPEDEF_SLICE_NAME(T, T##_slice)
 
 #define ARRAY_DEFAULT_CAP 64
 

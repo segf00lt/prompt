@@ -171,6 +171,20 @@ func str8_escaped(Arena *a, Str8 str) {
 }
 
 internal Str8
+func str8_get_line(Str8 str, s64 start_pos) {
+  Str8 line = str8_strip_whitespace(str8_get_line_no_strip(str, start_pos));
+  return line;
+}
+
+internal Str8
+func str8_get_line_no_strip(Str8 str, s64 start_pos) {
+  Str8 line;
+  line = str8_slice(str, start_pos, -1);
+  line = str8_slice(line, 0, str8_find_char(line, '\n'));
+  return line;
+}
+
+internal Str8
 func str8_slice(Str8 str, s64 begin, s64 end) {
   /* NOTE slice end is exclusive */
 

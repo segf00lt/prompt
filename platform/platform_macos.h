@@ -20,7 +20,6 @@
 #include <mach/mach.h>
 #include <mach/mach_vm.h>
 
-#include <curl/curl.h>
 
 #define internal static
 
