@@ -1,7 +1,29 @@
 
-- DONE Basic prompt interface
-- DONE Send all_messages and all_tools in POST to groq api
-- DONE Generate array of tools immediate mode style
-- DONE Process tool calls
+
+
+
+
+
+
+
+
+
+- Call embedding model and do RAG
+- Prevent infinite call loops
+
+
+TODO 13/02/26
+
 - DONE return tool call results to model in all_messages
 
+
+TODO 12/02/26
+
+- DONE Process tool calls
+- DONE Generate array of tools immediate mode style
+
+
+TODO 10/02/26
+
+- DONE Send all_messages and all_tools in POST to groq api
+- DONE Basic prompt interface

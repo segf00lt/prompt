@@ -692,40 +692,39 @@ func app_init(void) {
 internal void
 func app_update_and_render(App *ap) {
 
-  char *line = linenoise("prompt> ");
+  Groq_message response = arr_last(ap->all_messages);
 
-  if(!line) {
-    ap->flags |= APP_FLAG_QUIT;
+  if(response.tool_calls.count > 0) {
+
+    exec_tool_calls(ap, response);
+    Groq_message tool_result = arr_last(ap->all_messages);
+    printf("tool call result:\n\n%s\n\n", cstr_from_str8(ap->frame_arena, tool_result.content));
+
   } else {
 
-    Str8 content = str8_from_cstr(ap->frame_arena, line);
-
-    push_groq_user_message(ap, content);
-
-    send_all_messages_to_groq(ap);
-
-    Groq_message response = arr_last(ap->all_messages);
-
-    if(response.tool_calls.count > 0) {
-      exec_tool_calls(ap, response);
-      Groq_message tool_result = arr_last(ap->all_messages);
-      printf("tool call result:\n\n%s\n\n", cstr_from_str8(ap->frame_arena, tool_result.content));
-    } else {
-      if(response.content.len > 0) {
-        printf("model response:\n\n%s\n\n", cstr_from_str8(ap->frame_arena, response.content));
-      } else {
-        printf("model didn't reply.\n");
-      }
+    if(response.content.len > 0) {
+      printf("model response:\n\n%s\n\n", cstr_from_str8(ap->frame_arena, response.content));
     }
 
     if(response.flags & GROQ_MESSAGE_FLAG_ERROR) {
       printf("error:\n\n%s\n\n", cstr_from_str8(ap->frame_arena, response.content));
     }
 
+    char *line = linenoise("prompt> ");
 
-    linenoiseFree(line);
+    if(!line) {
+      ap->flags |= APP_QUIT;
+      return;
+    } else {
+      Str8 content = str8_from_cstr(ap->frame_arena, line);
+      push_groq_user_message(ap, content);
+
+      linenoiseFree(line);
+    }
 
   }
+
+  send_all_messages_to_groq(ap);
 
   arena_clear(ap->frame_arena);
 

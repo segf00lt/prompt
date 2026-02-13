@@ -125,7 +125,7 @@ TYPEDEF_ARRAY(Groq_message);
 
 
 typedef u64 App_flags;
-#define APP_FLAG_QUIT ((App_flags)(1ul << 0))
+#define APP_QUIT              ((App_flags)(1ul << 0))
 
 typedef struct App App;
 struct App {
@@ -161,8 +161,6 @@ internal void send_all_messages_to_groq(App *ap);
 
 internal void app_update_and_render(App *ap);
 
-
-internal void create_tool_hello(App *ap);
 
 
 #endif

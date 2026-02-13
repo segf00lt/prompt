@@ -28,18 +28,9 @@ int main(void) {
 
   App *ap = app_init();
 
-  // HERE
-  // TODO jfd:
-  // - DONE Basic prompt interface
-  // - DONE Send all_messages and all_tools in POST to groq api
-  // - DONE Generate array of tools immediate mode style
-  // - DONE Process tool calls
-  // - return tool call results to model in all_messages
-
-
   for(;;) {
 
-    if(ap->flags & APP_FLAG_QUIT) {
+    if(ap->flags & APP_QUIT) {
       break;
     }
 
