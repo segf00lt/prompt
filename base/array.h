@@ -36,6 +36,16 @@ struct name {                 \
 #define TYPEDEF_ARRAY(T) TYPEDEF_ARRAY_NAME(T, T##_array)
 #define TYPEDEF_SLICE(T) TYPEDEF_SLICE_NAME(T, T##_slice)
 
+#define IS_ARRAY(T) \
+(member_offset(T, d) == member_offset(__Arr_header, d) && \
+ member_offset(T, count) == member_offset(__Arr_header, count) && \
+ member_offset(T, cap) == member_offset(__Arr_header, cap) && \
+ member_offset(T, arena) == member_offset(__Arr_header, arena))
+
+#define IS_SLICE(T) \
+(member_offset(T, d) == member_offset(__Arr_header, d) && \
+ member_offset(T, count) == member_offset(__Arr_header, count))
+
 #define ARRAY_DEFAULT_CAP 64
 
 #define Arr(T)   struct { T *d; s64 count; s64 cap; Arena *arena; }

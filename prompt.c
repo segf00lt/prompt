@@ -43,6 +43,168 @@ func push_groq_user_message(App *ap, Str8 content) {
 }
 
 internal void
+func normalize_embedding_vector_in_place(App *ap, Embedding_vector v) {
+  ASSERT(v.d);
+  f32 dot = dot_embedding_vectors(ap, v, v);
+  f32 inv_dot = 1.0f/sqrtf(dot);
+  for(s64 i = 0; i < v.count; i++) {
+    v.d[i] *= inv_dot;
+  }
+}
+
+internal f32
+func dot_embedding_vectors(App *ap, Embedding_vector a, Embedding_vector b) {
+  ASSERT(a.d);
+  ASSERT(b.d);
+  ASSERT(a.count == b.count);
+
+  f32 result = 0;
+  s64 count = a.count;
+
+  for(s64 i = 0; i < count; i++) {
+    result += a.d[i] * b.d[i];
+  }
+
+  return result;
+}
+
+internal Embedding_vector_slice
+func get_embedding_vectors_for_texts(App *ap, Str8_list texts) {
+  int embedding_dimension = 1024;
+
+  Embedding_vector_slice result;
+  slice_init(result, texts.count, ap->main_arena);
+  for(int i = 0; i < result.count; i++) {
+    slice_init(result.d[i], embedding_dimension, ap->main_arena);
+  }
+
+  CURL *curl = ap->curl;
+  ASSERT(curl);
+
+  Curl_write_buffer write_buffer = {
+    .arena = ap->frame_arena,
+  };
+
+  struct curl_slist *headers = 0;
+
+  curl_easy_setopt(curl, CURLOPT_URL, "https://api.cohere.com/v2/embed");
+  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, my_curl_write_callback);
+  curl_easy_setopt(curl, CURLOPT_WRITEDATA, &write_buffer);
+  curl_easy_setopt(curl, CURLOPT_POST, 1L);
+  char *request_cstr = cstrf(ap->temp_arena,
+    "{"
+    "\"model\":\"embed-v4.0\","
+    "\"texts\":[\"%S\"],"
+    "\"input_type\":\"search_document\","
+    "\"embedding_types\":[\"float\"],"
+    "\"output_dimension\":%d"
+    "}",
+    str8_list_join(ap->temp_arena, texts, str8_lit("\",\"")),
+    embedding_dimension
+  );
+  platform_write_entire_file(str8_from_cstr(ap->temp_arena, request_cstr), "cohere_request.json");
+  curl_easy_setopt(curl, CURLOPT_POSTFIELDS, request_cstr);
+
+  headers = curl_slist_append(headers, "accept: application/json");
+  headers = curl_slist_append(headers, "content-type: application/json");
+  headers = curl_slist_append(headers, cstrf(ap->temp_arena, "Authorization: Bearer %S", ap->env[ENV_COHERE_API_KEY]));
+
+  curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+
+  CURLcode res = curl_easy_perform(curl);
+
+  if(res) {
+    printf("curl command failed with error: %d\n", res);
+  }
+
+  curl_slist_free_all(headers);
+
+  Str8 response_json = str8_list_join(ap->frame_arena, write_buffer.chunks, (Str8){0});
+
+  json_parse_result_t parse_result;
+  json_value_t *root = json_parse_ex(
+    response_json.s,
+    response_json.len,
+    json_parse_flags_allow_json5,
+    json_arena_push,
+    (void*)ap->frame_arena,
+    &parse_result
+  );
+  json_object_t *object = json_value_as_object(root);
+  ASSERT(object);
+
+  json_object_t *embeddings_object = 0;
+  json_array_t *texts_array = 0;
+
+  for(json_object_element_t *elem = object->start; elem; elem = elem->next) {
+    Str8 key = str8_from_cstr(ap->temp_arena, (char*)elem->name->string);
+
+    if(str8_match_lit("embeddings", key)) {
+      json_value_t *val = elem->value;
+      embeddings_object = json_value_as_object(val);
+    } else if(str8_match_lit("texts", key)) {
+      json_value_t *val = elem->value;
+      texts_array = json_value_as_array(val);
+    }
+
+  }
+
+  ASSERT(embeddings_object);
+  ASSERT(texts_array);
+
+  json_array_t *embeddings_float = 0;
+  for(json_object_element_t *elem = embeddings_object->start; elem; elem = elem->next) {
+    Str8 key = str8_from_cstr(ap->temp_arena, (char*)elem->name->string);
+
+    if(str8_match_lit("float", key)) {
+      json_value_t *val = elem->value;
+      embeddings_float = json_value_as_array(val);
+    }
+
+  }
+  ASSERT(embeddings_float);
+
+  ASSERT(embeddings_float->length == (u64)result.count);
+
+  {
+    int i = 0;
+    for(
+      json_array_element_t *elem = embeddings_float->start, *texts_elem = texts_array->start;
+      elem && texts_elem;
+      elem = elem->next, texts_elem = texts_elem->next, i++
+    ) {
+      json_array_t *vector = json_value_as_array(elem->value);
+      json_string_t *text = json_value_as_string(texts_elem->value);
+      ASSERT(vector);
+      ASSERT(text);
+
+      ASSERT((int)vector->length == embedding_dimension);
+      result.d[i].text = str8_from_cstr(ap->main_arena, (char*)text->string);
+
+      int j = 0;
+      for(json_array_element_t *elem = vector->start; elem; elem = elem->next, j++) {
+        json_number_t *val = json_value_as_number(elem->value);
+        ASSERT(val);
+        Str8 number_str = { (u8*)val->number, (s64)val->number_size };
+        f64 number = str8_parse_float(number_str);
+
+        result.d[i].d[j] = (f32)number;
+
+      }
+      ASSERT(j == embedding_dimension);
+
+    }
+
+    ASSERT(i == result.count);
+
+  }
+
+  arena_clear(ap->temp_arena);
+
+  return result;
+}
+
+internal void
 func send_all_messages_to_groq(App *ap) {
   CURL *curl = ap->curl;
   ASSERT(curl);
@@ -236,7 +398,6 @@ func send_all_messages_to_groq(App *ap) {
   Str8 curl_response = str8_list_join(ap->frame_arena, write_buffer.chunks, str8_lit(""));
   platform_write_entire_file(curl_response, "curl_response.json");
 
-  // Groq_message response_message = parse_groq_response_message(ap->frame_arena, curl_response, platform_arena);
   push_groq_model_response_message(ap, curl_response);
 
   #if 0

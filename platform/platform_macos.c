@@ -28,7 +28,20 @@ int main(void) {
 
   App *ap = app_init();
 
+  #if 1
+  Str8 texts[] = {
+    str8_lit("hello"),
+    str8_lit("goodbye"),
+  };
+  Str8_list texts_list = {0};
+  for(int i = 0; i < (int)ARRLEN(texts); i++) {
+    str8_list_append_str(ap->main_arena, &texts_list, texts[i]);
+  }
+  Embedding_vector_slice vectors = get_embedding_vectors_for_texts(ap, texts_list);
+  ASSERT(vectors.count == texts_list.count);
+  #else
   for(;;) {
+
 
     if(ap->flags & APP_QUIT) {
       break;
@@ -37,6 +50,7 @@ int main(void) {
     app_update_and_render(ap);
 
   }
+  #endif
 
   return 0;
 }

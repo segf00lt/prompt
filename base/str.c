@@ -530,9 +530,81 @@ func str8_match_begin_float(Str8 str) {
 
 internal f64
 func str8_parse_float(Str8 str) {
-  f64 result = 0.0f;
-  UNIMPLEMENTED;
-  return result;
+  // NOTE jfd 14/02/26: This was written by gpt, I may try and optimize it in the future
+
+  u8 *p = str.s;
+  u8 *end = str.s + str.len;
+
+  // 1) Skip leading whitespace
+  while(p < end && (*p == ' ' || *p == '\t' || *p == '\n' || *p == '\r')) {
+    p++;
+  }
+
+  // 2) Sign
+  int sign = 1;
+  if(p < end) {
+    if(*p == '-') { sign = -1; p++; }
+    else if(*p == '+') { p++; }
+  }
+
+  // 3) Integer part
+  f64 value = 0.0;
+  while(p < end && *p >= '0' && *p <= '9') {
+    value = value * 10.0 + (f64)(*p - '0');
+    p++;
+  }
+
+  // 4) Fractional part
+  if(p < end && *p == '.') {
+    p++;
+
+    f64 frac_scale = 0.1;
+    while(p < end && *p >= '0' && *p <= '9') {
+      value += (f64)(*p - '0') * frac_scale;
+      frac_scale *= 0.1;
+      p++;
+    }
+  }
+
+  // 5) Exponent
+  if(p < end && (*p == 'e' || *p == 'E')) {
+    p++;
+
+    int exp_sign = 1;
+    if(p < end) {
+      if(*p == '-') { exp_sign = -1; p++; }
+      else if(*p == '+') { p++; }
+    }
+
+    int exp_value = 0;
+    while(p < end && *p >= '0' && *p <= '9') {
+      exp_value = exp_value * 10 + (*p - '0');
+      p++;
+    }
+
+    int final_exp = exp_sign * exp_value;
+
+    // Apply exponent using pow10
+    f64 pow10 = 1.0;
+    f64 base = 10.0;
+    int abs_exp = final_exp < 0 ? -final_exp : final_exp;
+
+    while(abs_exp) {
+      if(abs_exp & 1) {
+        pow10 *= base;
+      }
+      base *= base;
+      abs_exp >>= 1;
+    }
+
+    if(final_exp < 0) {
+      value /= pow10;
+    } else {
+      value *= pow10;
+    }
+  }
+
+  return sign * value;
 }
 
 internal Str8

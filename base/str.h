@@ -34,6 +34,21 @@ struct Str8_find_results {
   s64 count;
 };
 
+typedef struct Str8_array Str8_array;
+struct Str8_array {
+  Str8 *d;
+  s64 count;
+  s64 cap;
+  Arena *arena;
+};
+
+typedef struct Str8_slice Str8_slice;
+struct Str8_slice {
+  Str8 *d;
+  s64 count;
+};
+
+
 #define str8_lit(strlit) ((Str8){ .s = (u8*)(strlit), .len = sizeof(strlit) - 1 })
 
 #define str8_match_lit(a_lit, b) str8_match(str8_lit(a_lit), b)

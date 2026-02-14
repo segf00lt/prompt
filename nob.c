@@ -86,6 +86,7 @@ int macos_build(void) {
   nob_cmd_append(&cmd,
     "clang",
     "-std=c99",
+    "--target=arm64-apple-macos",
     "-Wall",
     "-Wextra",
     "-Wno-unused-parameter",

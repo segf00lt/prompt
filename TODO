@@ -7,8 +7,10 @@
 
 
 
+TODO 14/02/26
 
-- Call embedding model and do RAG
+- DONE Call embedding model
+- and do RAG
 - Prevent infinite call loops
 
 

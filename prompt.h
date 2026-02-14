@@ -58,9 +58,6 @@ struct Curl_write_buffer {
   Str8_list chunks;
 };
 
-TYPEDEF_SLICE(Str8);
-TYPEDEF_ARRAY(Str8);
-
 typedef enum Groq_tool_parameter_type {
   GROQ_TOOL_PARAM_NONE = 0,
   GROQ_TOOL_PARAM_NUMBER,
@@ -120,8 +117,16 @@ struct Groq_message {
 STATIC_ASSERT(sizeof(Groq_message) <= 128, groq_message_is_less_than_96_bytes);
 #define GROQ_MESSAGE_SIZE ((u64)128)
 
-
 TYPEDEF_ARRAY(Groq_message);
+
+typedef struct Embedding_vector Embedding_vector;
+struct Embedding_vector {
+  f32 *d;
+  s64 count;
+  Str8 text;
+};
+STATIC_ASSERT(IS_SLICE(Embedding_vector), embedding_vector_is_slice);
+TYPEDEF_SLICE(Embedding_vector);
 
 
 typedef u64 App_flags;
@@ -147,20 +152,31 @@ struct App {
 STATIC_ASSERT(sizeof(App) <= MB(1), app_state_is_less_than_a_megabyte);
 #define APP_STATE_SIZE ((u64)MB(1))
 
-internal void parse_env_file(Str8 env_file, Str8 *env_dest, Str8 *env_var_str, int env_count);
-
 internal void* json_arena_push(void *user_data, size_t size);
 
 internal size_t my_curl_write_callback(void *contents, size_t size, size_t nmemb, void *userp);
 
 internal void push_groq_user_message(App *ap, Str8 content);
-internal void push_groq_model_response_message(App *ap, Str8 groq_response_json);
+
+internal void normalize_embedding_vector_in_place(App *ap, Embedding_vector v);
+
+internal f32 dot_embedding_vectors(App *ap, Embedding_vector a, Embedding_vector b);
+
+internal Embedding_vector_slice get_embedding_vectors_for_texts(App *ap, Str8_list texts);
 
 internal void send_all_messages_to_groq(App *ap);
 
+internal void push_groq_model_response_message(App *ap, Str8 groq_response_json);
+
+internal void load_tools(App *ap);
+
+internal void exec_tool_calls(App *ap, Groq_message message);
+
+internal void parse_env_file(Str8 env_file, Str8 *env_dest, Str8 *env_var_str, int env_count);
+
+internal App* app_init(void);
 
 internal void app_update_and_render(App *ap);
-
 
 
 #endif
