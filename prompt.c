@@ -102,7 +102,7 @@ func get_embedding_vectors_for_texts(App *ap, Str8_list texts) {
     str8_list_join(ap->temp_arena, texts, str8_lit("\",\"")),
     embedding_dimension
   );
-  platform_write_entire_file(str8_from_cstr(ap->temp_arena, request_cstr), "cohere_request.json");
+  platform_write_entire_file(str8_from_cstr(ap->temp_arena, request_cstr), "tmp/cohere_request.json");
   curl_easy_setopt(curl, CURLOPT_POSTFIELDS, request_cstr);
 
   headers = curl_slist_append(headers, "accept: application/json");
@@ -345,7 +345,7 @@ func send_all_messages_to_groq(App *ap) {
     str8_list_append_str(ap->frame_arena, &prompt_str_list, end);
 
     prompt_json = str8_list_join(ap->frame_arena, prompt_str_list, (Str8){0});
-    platform_write_entire_file(prompt_json, "prompt_log.json");
+    platform_write_entire_file(prompt_json, "tmp/prompt_log.json");
 
 
     #if 0
@@ -369,7 +369,7 @@ func send_all_messages_to_groq(App *ap) {
     char *pretty = json_write_pretty(root, indent, newline, &bytes);
     printf("bytes = %zu\n", bytes);
 
-    platform_write_entire_file((Str8){ .s = (u8*)pretty, .len = bytes - 1}, "prompt_log.json");
+    platform_write_entire_file((Str8){ .s = (u8*)pretty, .len = bytes - 1}, "tmp/prompt_log.json");
     // printf("prompt_json:\n%s\n", pretty);
     #endif
 
@@ -396,7 +396,7 @@ func send_all_messages_to_groq(App *ap) {
   }
 
   Str8 curl_response = str8_list_join(ap->frame_arena, write_buffer.chunks, str8_lit(""));
-  platform_write_entire_file(curl_response, "curl_response.json");
+  platform_write_entire_file(curl_response, "tmp/curl_response.json");
 
   push_groq_model_response_message(ap, curl_response);
 
@@ -409,7 +409,7 @@ func send_all_messages_to_groq(App *ap) {
   pretty.s = json_write_pretty(root, indent, newline, (size_t*)&pretty.len);
   pretty.len--;
 
-  platform_write_entire_file(pretty, "output.json");
+  platform_write_entire_file(pretty, "tmp/output.json");
   #endif
 
 
@@ -423,7 +423,7 @@ func push_groq_model_response_message(App *ap, Str8 groq_response_json) {
 
   Groq_message groq_response_message = {0};
 
-  platform_write_entire_file(groq_response_json, "output_test.json");
+  platform_write_entire_file(groq_response_json, "tmp/output_test.json");
 
   json_parse_result_t parse_result;
   json_value_t *root = json_parse_ex(
@@ -438,207 +438,194 @@ func push_groq_model_response_message(App *ap, Str8 groq_response_json) {
   json_object_t *object = json_value_as_object(root);
   ASSERT(object);
 
+  json_array_t *choices_array = 0;
+  json_object_t *error_object = 0;
+
   for(json_object_element_t *elem = object->start; elem; elem = elem->next) {
-    json_string_t *key = elem->name;
     json_value_t *val  = elem->value;
 
-    Str8 key_str;
-    arena_scope(ap->frame_arena) {
-      key_str = str8_from_cstr(ap->frame_arena, (char*)key->string);
-    }
+    Str8 key = str8_from_cstr(ap->temp_arena, (char*)elem->name->string);
 
-    if(str8_match_lit("choices", key_str)) {
-
-      json_array_t *choices_array = json_value_as_array(val);
-
-      json_array_element_t *last_choice = 0;
-      for(json_array_element_t *array_elem = choices_array->start; array_elem; array_elem = array_elem->next) {
-        if(array_elem->next == 0) {
-          last_choice = array_elem;
-        }
-      }
-
-      json_value_t *last_choice_val = last_choice->value;
-      json_object_t *last_choice_object = json_value_as_object(last_choice_val);
-
-      for(json_object_element_t *choice_elem = last_choice_object->start; choice_elem; choice_elem = choice_elem->next) {
-
-        json_string_t *key = choice_elem->name;
-        json_value_t *val  = choice_elem->value;
-
-        Str8 key_str;
-        arena_scope(ap->frame_arena) {
-          key_str = str8_from_cstr(ap->frame_arena, (char*)key->string);
-        }
-
-        if(str8_match_lit("message", key_str)) {
-          json_object_t *message_object = json_value_as_object(val);
-
-          for(json_object_element_t *message_elem = message_object->start; message_elem; message_elem = message_elem->next) {
-            json_string_t *key = message_elem->name;
-            json_value_t *val  = message_elem->value;
-
-            Str8 key_str;
-            arena_scope(ap->frame_arena) {
-              key_str = str8_from_cstr(ap->frame_arena, (char*)key->string);
-            }
-
-            if(str8_match_lit("content", key_str)) {
-              json_string_t *val_str = json_value_as_string(val);
-
-              groq_response_message.content = str8_from_cstr(ap->main_arena, (char*)val_str->string);
-            } else if(str8_match_lit("role", key_str)) {
-              json_string_t *val_str = json_value_as_string(val);
-              groq_response_message.role = str8_from_cstr(ap->main_arena, (char*)val_str->string);
-
-            } else if(str8_match_lit("reasoning", key_str)) {
-              json_string_t *val_str = json_value_as_string(val);
-              groq_response_message.reasoning = str8_from_cstr(ap->main_arena, (char*)val_str->string);
-
-            } else if(str8_match_lit("tool_calls", key_str)) {
-              json_array_t *tool_call_val = json_value_as_array(val);
-
-              s64 count = tool_call_val->length;
-              Groq_tool_call *tool_calls = push_array(ap->main_arena, Groq_tool_call, count);
-              groq_response_message.tool_calls.count = count;
-              groq_response_message.tool_calls.d     = tool_calls;
-              s64 i = 0;
-
-              for(json_array_element_t *tool_call_elem = tool_call_val->start; tool_call_elem; tool_call_elem = tool_call_elem->next) {
-                json_object_t *tool_call_object = json_value_as_object(tool_call_elem->value);
-
-                b32 parsed_id_field = false;
-                b32 parsed_function_field = false;
-
-                for(json_object_element_t *elem = tool_call_object->start; elem; elem = elem->next) {
-                  json_string_t *key = elem->name;
-
-                  Str8 key_str;
-                  arena_scope(ap->frame_arena) {
-                    key_str = str8_from_cstr(ap->frame_arena, (char*)key->string);
-                  }
-
-                  if(str8_match_lit("function", key_str)) {
-                    json_object_t *function_object = json_value_as_object(elem->value);
-
-                    for(json_object_element_t *elem = function_object->start; elem; elem = elem->next) {
-                      json_string_t *key = elem->name;
-                      json_value_t *val  = elem->value;
-
-                      Str8 key_str;
-                      arena_scope(ap->frame_arena) {
-                        key_str = str8_from_cstr(ap->frame_arena, (char*)key->string);
-                      }
-
-                      if(str8_match_lit("name", key_str)) {
-
-                        json_string_t *name_string = json_value_as_string(val);
-                        ASSERT(name_string && name_string->string);
-                        tool_calls[i].tool_name = str8_from_cstr(ap->main_arena, (char*)name_string->string);
-
-                      } else if(str8_match_lit("arguments", key_str)) {
-
-                        json_string_t *arguments_json_string = json_value_as_string(val);
-
-                        ASSERT(arguments_json_string && arguments_json_string->string);
-
-                        json_value_t *arguments_json = json_parse_ex(
-                          arguments_json_string->string,
-                          memory_strlen(arguments_json_string->string),
-                          0,
-                          json_arena_push,
-                          (void*)ap->main_arena,
-                          0
-                        );
-
-                        tool_calls[i].parameters = arguments_json;
-
-                      }
-
-                    }
-
-                    parsed_function_field = true;
-
-                  } else if(str8_match_lit("id", key_str)) {
-
-                    json_string_t *id_string = json_value_as_string(elem->value);
-                    ASSERT(id_string && id_string->string);
-                    tool_calls[i].id = str8_from_cstr(ap->main_arena, (char*)id_string->string);
-
-                    parsed_id_field = true;
-
-                  } else {
-
-                    if(parsed_function_field && parsed_id_field) {
-                      break;
-                    }
-
-                  }
-
-                }
-
-                if(parsed_function_field && parsed_id_field) {
-                  i++;
-                }
-
-              }
-
-              ASSERT(i == count);
-
-            }
-
-          }
-
-          PASS;
-        }
-
-      }
-
+    if(str8_match_lit("choices", key)) {
+      choices_array = json_value_as_array(val);
       break; // NOTE jfd: once we've parsed choices[]
 
-    } else if(str8_match_lit("error", key_str)) {
-      json_object_t *val_object = json_value_as_object(val);
+    } else if(str8_match_lit("error", key)) {
+      error_object = json_value_as_object(val);
 
-      for(json_object_element_t *elem = val_object->start; elem; elem = elem->next) {
-        json_string_t *key = elem->name;
-        json_value_t *val = elem->value;
-        Str8 key_str;
-        arena_scope(ap->frame_arena) {
-          key_str = str8_from_cstr(ap->frame_arena, (char*)key->string);
-        }
-
-        if(str8_match_lit("code", key_str)) {
-          json_string_t *error_code = json_value_as_string(val);
-          Str8 error_code_str;
-          arena_scope(ap->frame_arena) {
-            error_code_str = str8_from_cstr(ap->frame_arena, (char*)error_code->string);
-          }
-
-          if(str8_match_lit("rate_limit_exceeded", error_code_str)) {
-            groq_response_message.flags |=
-              GROQ_MESSAGE_FLAG_ERROR |
-              0;
-            groq_response_message.role = str8_lit("system");
-            groq_response_message.content = str8_lit("model rate limit exceeded");
-          }
-          break;
-        }
-
-      }
-
-    } else if(str8_match_lit("model", key_str)) {
+    } else if(str8_match_lit("model", key)) {
       // json_string_t *val_str = json_value_as_string(val);
       // printf("model: %s\n", val_str->string);
 
-    } else if(str8_match_lit("id", key_str)) {
+    } else if(str8_match_lit("id", key)) {
       // json_string_t *val_str = json_value_as_string(val);
       // printf("id: %s\n", val_str->string);
 
     }
 
-
   }
 
+  if(error_object) {
+
+    for(json_object_element_t *elem = error_object->start; elem; elem = elem->next) {
+      json_value_t *val = elem->value;
+      Str8 key = str8_from_cstr(ap->temp_arena, (char*)elem->name->string);
+      if(str8_match_lit("code", key)) {
+        json_string_t *error_code = json_value_as_string(val);
+        Str8 error_code_str;
+        arena_scope(ap->frame_arena) {
+          error_code_str = str8_from_cstr(ap->frame_arena, (char*)error_code->string);
+        }
+
+        if(str8_match_lit("rate_limit_exceeded", error_code_str)) {
+          groq_response_message.flags |=
+          GROQ_MESSAGE_FLAG_ERROR |
+          0;
+          groq_response_message.role = str8_lit("system");
+          groq_response_message.content = str8_lit("model rate limit exceeded");
+        }
+        break;
+      }
+
+    }
+
+  } else {
+
+    json_array_element_t *last_choice = 0;
+    for(json_array_element_t *array_elem = choices_array->start; array_elem; array_elem = array_elem->next) {
+      if(array_elem->next == 0) {
+        last_choice = array_elem;
+      }
+    }
+
+    json_value_t *last_choice_val = last_choice->value;
+    json_object_t *last_choice_object = json_value_as_object(last_choice_val);
+
+    json_object_t *message_object = 0;
+
+    for(json_object_element_t *elem = last_choice_object->start; elem; elem = elem->next) {
+      Str8 key = str8_from_cstr(ap->temp_arena, (char*)elem->name->string);
+      if(str8_match_lit("message", key)) {
+        message_object = json_value_as_object(elem->value);
+        break;
+      }
+
+    }
+
+    json_array_t *tool_call_array = 0;
+
+    if(message_object) {
+
+      for(json_object_element_t *elem = message_object->start; elem; elem = elem->next) {
+        json_value_t *val  = elem->value;
+
+        Str8 key = str8_from_cstr(ap->temp_arena, (char*)elem->name->string);
+        if(str8_match_lit("content", key)) {
+          json_string_t *val_str = json_value_as_string(val);
+          groq_response_message.content = str8_from_cstr(ap->main_arena, (char*)val_str->string);
+
+        } else if(str8_match_lit("role", key)) {
+          json_string_t *val_str = json_value_as_string(val);
+          groq_response_message.role = str8_from_cstr(ap->main_arena, (char*)val_str->string);
+
+        } else if(str8_match_lit("reasoning", key)) {
+          json_string_t *val_str = json_value_as_string(val);
+          groq_response_message.reasoning = str8_from_cstr(ap->main_arena, (char*)val_str->string);
+
+        } else if(str8_match_lit("tool_calls", key)) {
+          tool_call_array = json_value_as_array(val);
+        }
+
+      }
+
+    }
+
+
+    if(tool_call_array) {
+
+      s64 count = tool_call_array->length;
+      Groq_tool_call *tool_calls = push_array(ap->main_arena, Groq_tool_call, count);
+      groq_response_message.tool_calls.count = count;
+      groq_response_message.tool_calls.d = tool_calls;
+      s64 i = 0;
+
+      for(json_array_element_t *tool_call_elem = tool_call_array->start; tool_call_elem; tool_call_elem = tool_call_elem->next) {
+        json_object_t *tool_call_object = json_value_as_object(tool_call_elem->value);
+
+        b32 parsed_id_field = false;
+        b32 parsed_function_field = false;
+
+        for(json_object_element_t *elem = tool_call_object->start; elem; elem = elem->next) {
+
+          Str8 key = str8_from_cstr(ap->temp_arena, (char*)elem->name->string);
+          if(str8_match_lit("function", key)) {
+            json_object_t *function_object = json_value_as_object(elem->value);
+
+            for(json_object_element_t *elem = function_object->start; elem; elem = elem->next) {
+              json_value_t *val  = elem->value;
+
+              Str8 key = str8_from_cstr(ap->temp_arena, (char*)elem->name->string);
+              if(str8_match_lit("name", key)) {
+
+                json_string_t *name_string = json_value_as_string(val);
+                ASSERT(name_string && name_string->string);
+                tool_calls[i].tool_name = str8_from_cstr(ap->main_arena, (char*)name_string->string);
+
+              } else if(str8_match_lit("arguments", key)) {
+
+                json_string_t *arguments_json_string = json_value_as_string(val);
+
+                ASSERT(arguments_json_string && arguments_json_string->string);
+
+                json_value_t *arguments_json = json_parse_ex(
+                  arguments_json_string->string,
+                  memory_strlen(arguments_json_string->string),
+                  0,
+                  json_arena_push,
+                  (void*)ap->main_arena,
+                  0
+                );
+
+                tool_calls[i].parameters = arguments_json;
+
+              }
+
+            }
+
+            parsed_function_field = true;
+
+          } else if(str8_match_lit("id", key)) {
+
+            json_string_t *id_string = json_value_as_string(elem->value);
+            ASSERT(id_string && id_string->string);
+            tool_calls[i].id = str8_from_cstr(ap->main_arena, (char*)id_string->string);
+
+            parsed_id_field = true;
+
+          } else {
+
+            if(parsed_function_field && parsed_id_field) {
+              break;
+            }
+
+          }
+
+        }
+
+        if(parsed_function_field && parsed_id_field) {
+          i++;
+        }
+
+      }
+
+      ASSERT(i == count);
+
+    } /* if(tool_call_array) */
+
+
+  } /* else */
+
+  arena_clear(ap->temp_arena);
   arr_push(ap->all_messages, groq_response_message);
 
 }

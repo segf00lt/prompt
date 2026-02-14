@@ -3,15 +3,12 @@
 
 
 
-
-
-
-
 TODO 14/02/26
 
-- DONE Call embedding model
-- and do RAG
 - Prevent infinite call loops
+- and do RAG
+
+- DONE Call embedding model
 
 
 TODO 13/02/26
