@@ -1,5 +1,9 @@
+#include "base/platform_info.h"
+
 #define NOB_IMPLEMENTATION
 #include "nob.h"
+
+#include "third_party/raylib/nob_raylib.c"
 
 int win32_build_hot_reload_no_cradle(void) {
   Nob_Cmd cmd = {0};
@@ -134,9 +138,13 @@ int linux_build(void) {
 int main(int argc, char **argv) {
   NOB_GO_REBUILD_URSELF(argc, argv);
 
+
+
   if(!macos_build()) return 1;
 
   return 0;
+
+  if(!build_raylib_mac()) return 1;
 
   #if 0
   if(!win32_build_hot_reload()) return 1;
