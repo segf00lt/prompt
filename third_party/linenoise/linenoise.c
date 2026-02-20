@@ -109,6 +109,11 @@
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
+
+#if OS_LINUX
+#include <strings.h>
+#endif
+
 #include <stdlib.h>
 #include <ctype.h>
 #include <sys/stat.h>
@@ -447,7 +452,7 @@ static int utf8SingleCharWidth(const char *s, size_t len) {
 }
 
 enum KEY_ACTION{
-	KEY_NULL = 0,	    /* NULL */
+	KEY_ACTION_NULL = 0,	    /* NULL */
 	CTRL_A = 1,         /* Ctrl+a */
 	CTRL_B = 2,         /* Ctrl-b */
 	CTRL_C = 3,         /* Ctrl-c */

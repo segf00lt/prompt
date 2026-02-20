@@ -1,5 +1,7 @@
-#ifndef PROMPT_H
-#define PROMPT_H
+#ifndef APP_H
+#define APP_H
+
+
 
 #define ENV_VARS \
 X(GROQ_API_KEY) \
@@ -49,7 +51,6 @@ global read_only char *TOOL_NAME_CSTR[TOOL_COUNT] = {
   TOOLS
   #undef X
 };
-
 
 
 typedef struct Curl_write_buffer Curl_write_buffer;
@@ -132,9 +133,11 @@ TYPEDEF_SLICE(Embedding_vector);
 typedef u64 App_flags;
 #define APP_QUIT              ((App_flags)(1ul << 0))
 
+
 typedef struct App App;
 struct App {
   App_flags flags;
+  b32 did_reload;
 
   Arena *main_arena;
   Arena *frame_arena;
@@ -148,9 +151,16 @@ struct App {
 
   Str8 env[ENV_COUNT];
 
+  Str8 user_role;
+  Str8 tool_role;
+  Str8 system_role;
+  Str8 assistant_role;
+
 };
 STATIC_ASSERT(sizeof(App) <= MB(1), app_state_is_less_than_a_megabyte);
 #define APP_STATE_SIZE ((u64)MB(1))
+
+
 
 internal void* json_arena_push(void *user_data, size_t size);
 
@@ -176,7 +186,8 @@ internal void parse_env_file(Str8 env_file, Str8 *env_dest, Str8 *env_var_str, i
 
 internal App* app_init(void);
 
-internal void app_update_and_render(App *ap);
+internal void app_update(App *ap);
+
 
 
 #endif

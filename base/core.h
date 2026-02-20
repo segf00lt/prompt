@@ -9,6 +9,11 @@
 ////////////////////////////////
 //~ rjf: Codebase Keywords
 
+#if OS_LINUX
+#define _POSIX_C_SOURCE 200809L
+#endif
+
+
 #define internal      static
 #define global        static
 #define local_persist static

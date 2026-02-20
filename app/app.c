@@ -1,9 +1,10 @@
-#ifndef PROMPT_C
-#define PROMPT_C
+#ifndef APP_C
+#define APP_C
 
 
 ///////////////////////////
 // globals
+
 
 
 
@@ -35,7 +36,7 @@ func my_curl_write_callback(void *contents, size_t size, size_t nmemb, void *use
 internal void
 func push_groq_user_message(App *ap, Str8 content) {
   Groq_message message = {
-    .role = str8_lit("user"),
+    .role = ap->user_role,
     .content = str8_copy(ap->main_arena, content),
   };
 
@@ -481,8 +482,8 @@ func push_groq_model_response_message(App *ap, Str8 groq_response_json) {
           groq_response_message.flags |=
           GROQ_MESSAGE_FLAG_ERROR |
           0;
-          groq_response_message.role = str8_lit("system");
-          groq_response_message.content = str8_lit("model rate limit exceeded");
+          groq_response_message.role = ap->system_role;
+          groq_response_message.content = str8_from_cstr(ap->main_arena, "model rate limit exceeded");
         }
         break;
       }
@@ -647,12 +648,12 @@ func load_tools(App *ap) {
         Groq_tool *tool = &all_tools[tool_name];
 
         tool->name = tool_name;
-        tool->description = str8_lit("This tool prints \"hello\" to the user.");
+        tool->description = str8_from_cstr(ap->main_arena, "This tool prints \"hello\" to the user.");
         Groq_tool_parameter parameters[] = {
           {
             .param_type = GROQ_TOOL_PARAM_STRING,
-            .name = str8_lit("user_name"),
-            .description = str8_lit("The name of the user to say \"hello\" to. Ask if you don't know."),
+            .name = str8_from_cstr(ap->main_arena, "user_name"),
+            .description = str8_from_cstr(ap->main_arena, "The name of the user to say \"hello\" to. Ask if you don't know."),
           },
         };
 
@@ -666,12 +667,12 @@ func load_tools(App *ap) {
         Groq_tool *tool = &all_tools[tool_name];
 
         tool->name = tool_name;
-        tool->description = str8_lit("This tool prints \"goodbye\" to the user.");
+        tool->description = str8_from_cstr(ap->main_arena, "This tool prints \"goodbye\" to the user.");
         Groq_tool_parameter parameters[] = {
           {
             .param_type = GROQ_TOOL_PARAM_STRING,
-            .name = str8_lit("user_name"),
-            .description = str8_lit("The name of the user to say \"goodbye\" to. Ask if you don't know."),
+            .name = str8_from_cstr(ap->main_arena, "user_name"),
+            .description = str8_from_cstr(ap->main_arena, "The name of the user to say \"goodbye\" to. Ask if you don't know."),
           },
         };
 
@@ -697,7 +698,7 @@ func exec_tool_calls(App *ap, Groq_message message) {
         called = true;
 
         Groq_message result = {
-          .role = str8_lit("tool"),
+          .role = ap->tool_role,
           .tool_call_id = tool_call.id,
           .name = TOOL_NAME_STR[tool_name],
         };
@@ -718,7 +719,7 @@ func exec_tool_calls(App *ap, Groq_message message) {
                 if(val) {
                   result.content = str8f(ap->main_arena, "Hello there, %s!", val->string);
                 } else {
-                  result.content = str8_lit("bad 'user_name' parameter\n");
+                  result.content = str8_from_cstr(ap->main_arena, "bad 'user_name' parameter\n");
                 }
               }
             }
@@ -738,7 +739,7 @@ func exec_tool_calls(App *ap, Groq_message message) {
                 if(val) {
                   result.content = str8f(ap->main_arena, "Goodbye, %s!", val->string);
                 } else {
-                  result.content = str8_lit("bad 'user_name' parameter\n");
+                  result.content = str8_from_cstr(ap->main_arena, "bad 'user_name' parameter\n");
                 }
               }
             }
@@ -754,7 +755,7 @@ func exec_tool_calls(App *ap, Groq_message message) {
 
     if(!called) {
       Groq_message result = {
-        .role = str8_lit("assistant"),
+        .role = ap->assistant_role,
         .content = str8f(ap->main_arena, "error: the requested tool '%S' is not available", tool_call.tool_name),
       };
       arr_push(ap->all_messages, result);
@@ -810,6 +811,7 @@ func parse_env_file(Str8 env_file, Str8 *env_dest, Str8 *env_var_str, int env_co
 
 internal App*
 func app_init(void) {
+
   App *ap = platform_alloc(APP_STATE_SIZE);
 
   ASSERT(ap);
@@ -832,13 +834,18 @@ func app_init(void) {
   arena_clear(ap->temp_arena);
   #endif
 
+  ap->user_role      = str8_from_cstr(ap->main_arena, "user");
+  ap->tool_role      = str8_from_cstr(ap->main_arena, "tool");
+  ap->system_role    = str8_from_cstr(ap->main_arena, "system");
+  ap->assistant_role = str8_from_cstr(ap->main_arena, "assistant");
+
   load_tools(ap);
 
   return ap;
 }
 
 internal void
-func app_update_and_render(App *ap) {
+func app_update(App *ap) {
 
   Groq_message response = arr_last(ap->all_messages);
 
@@ -858,7 +865,7 @@ func app_update_and_render(App *ap) {
       printf("error:\n\n%s\n\n", cstr_from_str8(ap->frame_arena, response.content));
     }
 
-    char *line = linenoise("prompt> ");
+    char *line = linenoise("prompt cowabunga> ");
 
     if(!line) {
       ap->flags |= APP_QUIT;
@@ -877,5 +884,8 @@ func app_update_and_render(App *ap) {
   arena_clear(ap->frame_arena);
 
 }
+
+
+
 
 #endif

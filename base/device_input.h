@@ -20,9 +20,9 @@ typedef u32 Keyboard_modifier;
 #define KBD_MOD_META    ((Keyboard_modifier)(1 << KBD_MOD_INDEX_META))
 
 typedef enum Mouse_button {
-  MOUSE_BUTTON_LEFT,
-  MOUSE_BUTTON_RIGHT,
-  MOUSE_BUTTON_MIDDLE,
+  MOUSE_BTN_LEFT,
+  MOUSE_BTN_RIGHT,
+  MOUSE_BTN_MIDDLE,
 } Mouse_button;
 
 typedef enum Keyboard_key {

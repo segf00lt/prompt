@@ -3,7 +3,6 @@
 
 #include <math.h>
 
-#define PI ((f32)3.1415926f)
 
 // TODO jfd: handle negative values in round_f32_to_s32()
 force_inline s32

@@ -6,6 +6,7 @@
 
 #endif
 
+#define RAYLIB_PATH "./third_party/raylib"
 
 enum {
   RAYLIB_BUILD_FIRST = 0,
@@ -16,7 +17,12 @@ enum {
   RAYLIB_BUILD_COUNT,
 };
 
-#define RAYLIB_PATH "./third_party/raylib"
+char *raylib_build_name_strings[RAYLIB_BUILD_COUNT] = {
+  [RAYLIB_BUILD_STATIC] = "static",
+  [RAYLIB_BUILD_SHARED] = "shared",
+  [RAYLIB_BUILD_DEBUG]  = "debug",
+  [RAYLIB_BUILD_WEB]    = "web",
+};
 
 char *raylib_compiler_linux = "clang";
 char *raylib_compiler_mac = "clang";
@@ -196,21 +202,9 @@ char *raylib_files_web[] = {
 
 
 
-#if OS_WINDOWS
-
-#define RAYLIB_SHARED_LIB_NAME "raylib.dll"
-
-#elif OS_MAC
-
-#define RAYLIB_SHARED_LIB_NAME "libraylib.dylib"
-
-#elif OS_LINUX
-
-#define RAYLIB_SHARED_LIB_NAME "libraylib.so"
-
-#else
-#error unsupported build platform
-#endif
+#define RAYLIB_SHARED_LIB_NAME_WINDOWS "raylib.dll"
+#define RAYLIB_SHARED_LIB_NAME_MAC "libraylib.dylib"
+#define RAYLIB_SHARED_LIB_NAME_LINUX "libraylib.so"
 
 
 #define RAYLIB_BUILD_DIR             RAYLIB_PATH"/build"
@@ -220,10 +214,17 @@ char *raylib_files_web[] = {
 #define RAYLIB_DEBUG_BUILD_DIR       RAYLIB_BUILD_DIR"/debug"
 #define RAYLIB_WEB_BUILD_DIR         RAYLIB_BUILD_DIR"/web"
 
-
 #define RAYLIB_STATIC_LIB_PATH       RAYLIB_STATIC_BUILD_DIR"/libraylib.a"
-#define RAYLIB_SHARED_LIB_PATH       RAYLIB_SHARED_BUILD_DIR"/"RAYLIB_SHARED_LIB_NAME
-#define RAYLIB_DEBUG_LIB_PATH        RAYLIB_DEBUG_BUILD_DIR"/"RAYLIB_SHARED_LIB_NAME
+
+#define RAYLIB_SHARED_LIB_PATH_WINDOWS     RAYLIB_SHARED_BUILD_DIR"/"RAYLIB_SHARED_LIB_NAME_WINDOWS
+#define RAYLIB_DEBUG_LIB_PATH_WINDOWS      RAYLIB_DEBUG_BUILD_DIR"/"RAYLIB_SHARED_LIB_NAME_WINDOWS
+
+#define RAYLIB_SHARED_LIB_PATH_MAC         RAYLIB_SHARED_BUILD_DIR"/"RAYLIB_SHARED_LIB_NAME_MAC
+#define RAYLIB_DEBUG_LIB_PATH_MAC          RAYLIB_DEBUG_BUILD_DIR"/"RAYLIB_SHARED_LIB_NAME_MAC
+
+#define RAYLIB_SHARED_LIB_PATH_LINUX       RAYLIB_SHARED_BUILD_DIR"/"RAYLIB_SHARED_LIB_NAME_LINUX
+#define RAYLIB_DEBUG_LIB_PATH_LINUX        RAYLIB_DEBUG_BUILD_DIR"/"RAYLIB_SHARED_LIB_NAME_LINUX
+
 #define RAYLIB_WEB_LIB_PATH          RAYLIB_WEB_BUILD_DIR"/libraylib.web.a"
 
 
@@ -245,8 +246,10 @@ int build_raylib_mac(void) {
   int linker_cmds_count = 0;
 
   for(int build_type = RAYLIB_BUILD_FIRST; build_type < RAYLIB_BUILD_COUNT; build_type++) {
+    nob_log(NOB_INFO, "%s build", raylib_build_name_strings[build_type]);
 
     if(build_type == RAYLIB_BUILD_WEB) {
+      nob_log(NOB_INFO, "skipping web build");
       continue; // TODO jfd: raylib web build
     } else {
 
@@ -290,7 +293,7 @@ int build_raylib_mac(void) {
         raylib_compiler_mac,
         shared_build_cflag_mac,
         "-o",
-        RAYLIB_DEBUG_LIB_PATH
+        RAYLIB_DEBUG_LIB_PATH_MAC
       );
       nob_da_append_many(linker_cmd, raylib_object_files, NOB_ARRAY_LEN(raylib_object_files));
       nob_da_append_many(linker_cmd, raylib_ldflags_mac, NOB_ARRAY_LEN(raylib_ldflags_mac));
@@ -300,7 +303,7 @@ int build_raylib_mac(void) {
         raylib_compiler_mac,
         shared_build_cflag_mac,
         "-o",
-        RAYLIB_SHARED_LIB_PATH
+        RAYLIB_SHARED_LIB_PATH_MAC
       );
       nob_da_append_many(linker_cmd, raylib_object_files, NOB_ARRAY_LEN(raylib_object_files));
       nob_da_append_many(linker_cmd, raylib_ldflags_mac, NOB_ARRAY_LEN(raylib_ldflags_mac));
@@ -358,8 +361,10 @@ int build_raylib_linux(void) {
   int linker_cmds_count = 0;
 
   for(int build_type = RAYLIB_BUILD_FIRST; build_type < RAYLIB_BUILD_COUNT; build_type++) {
+    nob_log(NOB_INFO, "%s build", raylib_build_name_strings[build_type]);
 
     if(build_type == RAYLIB_BUILD_WEB) {
+      nob_log(NOB_INFO, "skipping web build");
       continue; // TODO jfd: raylib web build
     } else {
 
@@ -370,8 +375,6 @@ int build_raylib_linux(void) {
 
         nob_cmd_append(compile_cmd,
           raylib_compiler_linux,
-          "-x",
-          "objective-c",
           "-c",
           raylib_src_files[i],
           "-o",
@@ -403,7 +406,7 @@ int build_raylib_linux(void) {
         raylib_compiler_linux,
         shared_build_cflag_linux,
         "-o",
-        RAYLIB_DEBUG_LIB_PATH
+        RAYLIB_DEBUG_LIB_PATH_LINUX
       );
       nob_da_append_many(linker_cmd, raylib_object_files, NOB_ARRAY_LEN(raylib_object_files));
       nob_da_append_many(linker_cmd, raylib_ldflags_linux, NOB_ARRAY_LEN(raylib_ldflags_linux));
@@ -413,7 +416,7 @@ int build_raylib_linux(void) {
         raylib_compiler_linux,
         shared_build_cflag_linux,
         "-o",
-        RAYLIB_SHARED_LIB_PATH
+        RAYLIB_SHARED_LIB_PATH_LINUX
       );
       nob_da_append_many(linker_cmd, raylib_object_files, NOB_ARRAY_LEN(raylib_object_files));
       nob_da_append_many(linker_cmd, raylib_ldflags_linux, NOB_ARRAY_LEN(raylib_ldflags_linux));

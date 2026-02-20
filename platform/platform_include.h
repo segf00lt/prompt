@@ -11,7 +11,7 @@
 
 #elif OS_LINUX
 
-#error unsupported platform
+#include "platform_linux.h"
 
 #elif OS_MAC
 

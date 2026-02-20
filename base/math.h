@@ -4,6 +4,8 @@
 #define TYPEDEF_VEC2(T) typedef struct v2_##T { T x; T y; } v2_##T;
 #define TYPEDEF_VEC3(T) typedef struct v3_##T { T x; T y; T z; } v3_##T;
 
+#define PI 3.14159265358979323846f
+
 
 TYPEDEF_VEC2(s8);
 TYPEDEF_VEC2(s16);

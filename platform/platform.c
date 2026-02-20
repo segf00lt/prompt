@@ -6,5 +6,4 @@
 // I.E. various helpers for platform absctraction things.
 
 
-
 #endif

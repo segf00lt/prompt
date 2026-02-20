@@ -8,6 +8,45 @@
 // absolutely must be able to ask the platform for.
 
 
+typedef enum Platform_event_kind {
+  EVENT_NULL = 0,
+  EVENT_KEY_PRESS,
+  EVENT_KEY_RELEASE,
+  EVENT_MOUSE_MOVE,
+  EVENT_MOUSE_CLICK,
+  EVENT_MOUSE_SCROLL,
+} Platform_event_kind;
+
+
+typedef struct Platform_event Platform_event;
+struct Platform_event {
+  Platform_event *next;
+  Platform_event *prev;
+  Platform_event_kind kind;
+  Keyboard_modifier modifier_mask;
+  Keyboard_key key;
+  Mouse_button mouse_button;
+  b16 is_repeat;
+  u16 repeat_count;
+  u32 character;
+  v2 mouse_pos;
+  v2 scroll_delta;
+};
+
+typedef struct Platform_event_list Platform_event_list;
+struct Platform_event_list {
+  s64 count;
+  Platform_event *first;
+  Platform_event *last;
+};
+
+
+typedef struct Platform Platform;
+struct Platform {
+  void *backbuffer;
+  u64   backbuffer_size;
+};
+
 internal        Keyboard_modifier platform_get_keyboard_modifiers(void);
 
 internal        void*             platform_alloc(u64 bytes);
@@ -27,6 +66,7 @@ internal        void              platform_sleep_ms(u32 ms);
 internal        void*             platform_library_load(char *path);
 internal        void              platform_library_unload(void *lib);
 internal        Void_func*        platform_library_load_function(void *lib, char *name);
+
 
 
 #endif

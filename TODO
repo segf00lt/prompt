@@ -3,9 +3,15 @@
 
 
 
+TODO 20/02/26
+
+- Non-blocking curl
+- Simple GUI
 
 - Prevent infinite call loops
 - and do RAG
+
+- DONE Hot reloading
 
 
 TODO 14/02/26
