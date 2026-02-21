@@ -19,6 +19,7 @@ int module_main(void *state) {
   platform_linux_main(pp_linux);
 
   int do_reload = pp_linux->do_reload;
+  pp_linux->do_reload = 0;
 
   return do_reload;
 

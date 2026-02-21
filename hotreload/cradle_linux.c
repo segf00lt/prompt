@@ -36,39 +36,22 @@ int main(int argc, char **argv) {
     Module_init_func *module_init = 0;
     Module_main_func *module_main = 0;
 
-    int module_file_exists = 0;
     {
       struct stat st;
-      if(stat("./"MODULE".so", &st) == 0) {
-        module_file_exists = 1;
+      if(stat("./"MODULE".so", &st) != 0) {
+        printf(MODULE".so not found\n");
+        return 1;
       }
     }
 
-    if(module_file_exists) {
-      for(;;) {
-        if(rename(MODULE".so", MODULE".so.live") == 0) {
-          break;
-        }
-
-        if(errno != EBUSY) {
-          printf("error loading app code\n");
-          return 1;
-        }
-
-        unsigned int ms = 10;
-        struct timespec req, rem;
-        req.tv_sec = (time_t)(ms / 1000);
-        req.tv_nsec = (long)((ms % 1000) * 1000000L);
-        while(nanosleep(&req, &rem) == -1 && errno == EINTR) {
-          req = rem;
-        }
-
-      }
+    if(rename(MODULE".so", MODULE".so.live") != 0) {
+      printf("module file rename failed\n");
+      return 1;
     }
 
     module = dlopen("./"MODULE".so.live", RTLD_NOW | RTLD_LOCAL);
     if(!module) {
-      printf("%s", dlerror());
+      printf("%s\n", dlerror());
       return 1;
     }
 
@@ -90,11 +73,11 @@ int main(int argc, char **argv) {
 
     int reload_module = module_main(module_state);
 
+    dlclose(module);
+
     if(!reload_module) {
       break;
     }
-
-    dlclose(module);
 
   }
 

@@ -30,11 +30,11 @@ func platform_linux_init(void) {
   ASSERT(vectors.count == texts_list.count);
   #endif
 
-  // SetConfigFlags(FLAG_WINDOW_RESIZABLE);
-  // InitWindow(1000, 800, "prompt");
-  // SetTargetFPS(60);
-  // SetTraceLogLevel(LOG_DEBUG);
-  // SetExitKey(0);
+  SetConfigFlags(FLAG_WINDOW_RESIZABLE);
+  InitWindow(1000, 800, "prompt");
+  SetTargetFPS(60);
+  SetTraceLogLevel(LOG_DEBUG);
+  SetExitKey(0);
 
   return pp;
 }
@@ -48,7 +48,7 @@ func platform_linux_main(Platform_linux *pp) {
   for(;;) {
 
     if(ap->flags & APP_QUIT) {
-      // CloseWindow();
+      CloseWindow();
       break;
     }
 
@@ -60,22 +60,38 @@ func platform_linux_main(Platform_linux *pp) {
     }
     #endif
 
-    app_update(ap);
+    {
+      if(IsKeyPressed(KEY_ENTER)) {
+        ap->say_hello_to_model = true;
+      }
+    }
 
-    // { /* render */
-    //   BeginDrawing();
+    app_update_new(ap);
+
+    { /* render */
+      Color color = RED;
+      local_persist b32 flip = 1;
+      if(flip) {
+        color = BLUE;
+      }
 
 
-    //   ClearBackground(BLACK);
+
+      BeginDrawing();
 
 
-    //   EndDrawing();
+      ClearBackground(color);
 
-    //   if(WindowShouldClose()) {
-    //     CloseWindow();
-    //   }
 
-    // } /* render */
+      EndDrawing();
+
+      if(WindowShouldClose()) {
+        CloseWindow();
+        break;
+      }
+      flip = !flip;
+
+    } /* render */
 
 
   }

@@ -27,6 +27,7 @@ struct Platform_linux {
   Arena *main_arena;
   App *ap;
   b32 do_reload;
+  struct stat st;
 };
 
 internal Platform_linux* platform_linux_init(void);

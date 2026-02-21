@@ -2,13 +2,11 @@
 #define APP_C
 
 
-///////////////////////////
 // globals
 
 
 
 
-///////////////////////////
 // functions
 
 internal void*
@@ -79,8 +77,8 @@ func get_embedding_vectors_for_texts(App *ap, Str8_list texts) {
     slice_init(result.d[i], embedding_dimension, ap->main_arena);
   }
 
-  CURL *curl = ap->curl;
-  ASSERT(curl);
+  CURL *curl_easy_handle = ap->curl_easy_handle;
+  ASSERT(curl_easy_handle);
 
   Curl_write_buffer write_buffer = {
     .arena = ap->frame_arena,
@@ -88,10 +86,10 @@ func get_embedding_vectors_for_texts(App *ap, Str8_list texts) {
 
   struct curl_slist *headers = 0;
 
-  curl_easy_setopt(curl, CURLOPT_URL, "https://api.cohere.com/v2/embed");
-  curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, my_curl_write_callback);
-  curl_easy_setopt(curl, CURLOPT_WRITEDATA, &write_buffer);
-  curl_easy_setopt(curl, CURLOPT_POST, 1L);
+  curl_easy_setopt(curl_easy_handle, CURLOPT_URL, "https://api.cohere.com/v2/embed");
+  curl_easy_setopt(curl_easy_handle, CURLOPT_WRITEFUNCTION, my_curl_write_callback);
+  curl_easy_setopt(curl_easy_handle, CURLOPT_WRITEDATA, &write_buffer);
+  curl_easy_setopt(curl_easy_handle, CURLOPT_POST, 1L);
   char *request_cstr = cstrf(ap->temp_arena,
     "{"
     "\"model\":\"embed-v4.0\","
@@ -104,18 +102,18 @@ func get_embedding_vectors_for_texts(App *ap, Str8_list texts) {
     embedding_dimension
   );
   platform_write_entire_file(str8_from_cstr(ap->temp_arena, request_cstr), "tmp/cohere_request.json");
-  curl_easy_setopt(curl, CURLOPT_POSTFIELDS, request_cstr);
+  curl_easy_setopt(curl_easy_handle, CURLOPT_POSTFIELDS, request_cstr);
 
   headers = curl_slist_append(headers, "accept: application/json");
   headers = curl_slist_append(headers, "content-type: application/json");
   headers = curl_slist_append(headers, cstrf(ap->temp_arena, "Authorization: Bearer %S", ap->env[ENV_COHERE_API_KEY]));
 
-  curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+  curl_easy_setopt(curl_easy_handle, CURLOPT_HTTPHEADER, headers);
 
-  CURLcode res = curl_easy_perform(curl);
+  CURLcode res = curl_easy_perform(curl_easy_handle);
 
   if(res) {
-    printf("curl command failed with error: %d\n", res);
+    printf("curl_easy_handle command failed with error: %d\n", res);
   }
 
   curl_slist_free_all(headers);
@@ -207,8 +205,9 @@ func get_embedding_vectors_for_texts(App *ap, Str8_list texts) {
 
 internal void
 func send_all_messages_to_groq(App *ap) {
-  CURL *curl = ap->curl;
-  ASSERT(curl);
+  CURL *curl_easy_handle = ap->curl_easy_handle;
+
+  ASSERT(curl_easy_handle);
 
   Curl_write_buffer write_buffer = {
     .arena = ap->frame_arena,
@@ -377,23 +376,23 @@ func send_all_messages_to_groq(App *ap) {
   }
 
   arena_scope(ap->frame_arena) {
-    curl_easy_setopt(curl, CURLOPT_URL, "https://api.groq.com/openai/v1/chat/completions");
-    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, my_curl_write_callback);
-    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &write_buffer);
-    curl_easy_setopt(curl, CURLOPT_POST, 1L);
-    curl_easy_setopt(curl, CURLOPT_POSTFIELDS,
+    curl_easy_setopt(curl_easy_handle, CURLOPT_URL, "https://api.groq.com/openai/v1/chat/completions");
+    curl_easy_setopt(curl_easy_handle, CURLOPT_WRITEFUNCTION, my_curl_write_callback);
+    curl_easy_setopt(curl_easy_handle, CURLOPT_WRITEDATA, &write_buffer);
+    curl_easy_setopt(curl_easy_handle, CURLOPT_POST, 1L);
+    curl_easy_setopt(curl_easy_handle, CURLOPT_POSTFIELDS,
       cstr_from_str8(ap->frame_arena, prompt_json)
     );
 
     headers = curl_slist_append(headers, "Content-Type: application/json");
     headers = curl_slist_append(headers, cstrf(ap->frame_arena, "Authorization: Bearer %S", ap->env[ENV_GROQ_API_KEY]));
 
-    curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
+    curl_easy_setopt(curl_easy_handle, CURLOPT_HTTPHEADER, headers);
   }
 
-  CURLcode res = curl_easy_perform(curl);
+  CURLcode res = curl_easy_perform(curl_easy_handle);
   if(res) {
-    printf("curl command failed with error: %d\n", res);
+    printf("curl_easy_handle command failed with error: %d\n", res);
   }
 
   Str8 curl_response = str8_list_join(ap->frame_arena, write_buffer.chunks, str8_lit(""));
@@ -418,6 +417,199 @@ func send_all_messages_to_groq(App *ap) {
   curl_slist_free_all(headers);
 
 }
+
+internal void
+func send_all_messages_to_groq_new(App *ap) {
+  CURL *curl_easy_handle = curl_easy_init();
+
+  ASSERT(curl_easy_handle);
+
+  struct curl_slist *headers = 0;
+
+  Str8 prompt_json = {0};
+  {
+    Str8_list prompt_str_list = {0};
+    Str8_list messages_str_list = {0};
+    Str8_list tools_str_list = {0};
+    Str8 preamble = str8_lit(
+      "{"
+      "\"model\": \"openai/gpt-oss-120b\","
+      "\"temperature\": 0,"
+      "\"max_completion_tokens\": 8192,"
+      "\"top_p\": 1,"
+      "\"stream\": false,"
+      "\"reasoning_effort\": \"medium\","
+      "\"stop\": null,"
+    );
+
+    Str8 end = str8_lit("}");
+
+    Str8 messages_begin = str8_lit("\"messages\": [");
+    Str8 messages_end = str8_lit("],");
+
+    for(s64 i = 0; i < ap->all_messages.count; i++) {
+      Groq_message message = ap->all_messages.d[i];
+      Str8 message_str = {0};
+
+      if(str8_match_lit("tool", message.role)) {
+        message_str = str8f(ap->frame_arena,
+          "{ \"role\": \"%S\", \"content\": \"%S\", \"name\": \"%S\", \"tool_call_id\": \"%S\" }",
+          message.role, str8_escaped(ap->curl_arena, message.content), message.name, message.tool_call_id
+        );
+      } else {
+        message_str = str8f(ap->curl_arena,
+          "{ \"role\": \"%S\", \"content\": \"%S\" }",
+          message.role, str8_escaped(ap->curl_arena, message.content)
+        );
+      }
+
+      str8_list_append_str(ap->curl_arena, &messages_str_list, message_str);
+    }
+
+    Str8 all_messages_json_str = str8_list_join(ap->curl_arena, messages_str_list, str8_lit(","));
+
+    #if 0
+    arena_scope(ap->curl_arena) {
+      printf("all messages: %s\n", cstr_from_str8(ap->curl_arena, all_messages_json_str));
+    }
+    #endif
+
+
+    Str8 tools_begin = str8_lit("\"tools\": [");
+    Str8 tools_end = str8_lit("]"); // NOTE jfd: tools come last
+
+    for(s64 i = 0; i < ap->all_tools.count; i++) {
+
+      Groq_tool tool = ap->all_tools.d[i];
+
+      Str8_list tool_param_list = {0};
+      Str8 tool_params_json = {0};
+      Str8 required_params_json = {0};
+      Str8_list required_param_list = {0};
+      Str8 tool_param_list_sep = str8_lit(",");
+      Str8 required_param_list_sep = str8_lit("\",\"");
+
+      for(s64 i = 0; i < tool.parameters.count; i++) {
+        Groq_tool_parameter param = tool.parameters.d[i];
+
+        switch(param.param_type) {
+          default:
+          UNREACHABLE;
+          break;
+          case GROQ_TOOL_PARAM_NUMBER: {
+            UNIMPLEMENTED;
+          } break;
+          case GROQ_TOOL_PARAM_INTEGER: {
+            UNIMPLEMENTED;
+          } break;
+          case GROQ_TOOL_PARAM_BOOLEAN: {
+            UNIMPLEMENTED;
+          } break;
+          case GROQ_TOOL_PARAM_STRING: {
+
+            if(param.accepted_string_values.count > 0) {
+              UNIMPLEMENTED;
+            } else {
+              str8_list_append_str(ap->curl_arena, &tool_param_list,
+                str8f(ap->curl_arena, "\"%S\": { \"type\": \"string\", \"description\": \"%S\" }", param.name, str8_escaped(ap->curl_arena, param.description))
+              );
+            }
+
+          } break;
+          case GROQ_TOOL_PARAM_ARRAY: {
+            UNIMPLEMENTED;
+          } break;
+          case GROQ_TOOL_PARAM_OBJECT: {
+            UNIMPLEMENTED;
+          } break;
+        }
+
+        if(!param.is_optional) {
+          str8_list_append_str(ap->curl_arena, &required_param_list, param.name);
+        }
+
+      }
+
+      tool_params_json = str8_list_join(ap->curl_arena, tool_param_list, tool_param_list_sep);
+      required_params_json = str8_list_join(ap->curl_arena, required_param_list, required_param_list_sep);
+
+      Str8 tool_str = str8f(ap->curl_arena,
+        "{ \"type\": \"function\", \"function\": {"
+        "\"name\": \"%S\", \"description\": \"%S\","
+        "\"parameters\": { \"type\": \"object\", \"properties\": { %S }, \"required\": [ \"%S\" ] }"
+        "} }",
+        TOOL_NAME_STR[tool.name], str8_escaped(ap->curl_arena, tool.description), tool_params_json, required_params_json
+      );
+      str8_list_append_str(ap->curl_arena, &tools_str_list, tool_str);
+
+    }
+    Str8 all_tools_json_str = str8_list_join(ap->curl_arena, tools_str_list, str8_lit(","));
+
+
+    str8_list_append_str(ap->curl_arena, &prompt_str_list, preamble);
+    str8_list_append_str(ap->curl_arena, &prompt_str_list, messages_begin);
+    str8_list_append_str(ap->curl_arena, &prompt_str_list, all_messages_json_str);
+    str8_list_append_str(ap->curl_arena, &prompt_str_list, messages_end);
+    str8_list_append_str(ap->curl_arena, &prompt_str_list, tools_begin);
+    str8_list_append_str(ap->curl_arena, &prompt_str_list, all_tools_json_str);
+    str8_list_append_str(ap->curl_arena, &prompt_str_list, tools_end);
+    str8_list_append_str(ap->curl_arena, &prompt_str_list, end);
+
+    prompt_json = str8_list_join(ap->curl_arena, prompt_str_list, (Str8){0});
+    platform_write_entire_file(prompt_json, "tmp/prompt_log.json");
+
+
+    #if 0
+    json_parse_result_t parse_result;
+    json_value_t *root = json_parse_ex(
+      prompt_json.s,
+      prompt_json.len,
+      json_parse_flags_allow_json5,
+      json_arena_push,
+      (void*)ap->curl_arena,
+      &parse_result
+    );
+
+    printf("prompt_json.len = %li\n", prompt_json.len);
+    ASSERT(prompt_json.len > 0);
+    ASSERT(root);
+
+    char *indent = "  ";
+    char *newline = "\n";
+    size_t bytes;
+    char *pretty = json_write_pretty(root, indent, newline, &bytes);
+    printf("bytes = %zu\n", bytes);
+
+    platform_write_entire_file((Str8){ .s = (u8*)pretty, .len = bytes - 1}, "tmp/prompt_log.json");
+    // printf("prompt_json:\n%s\n", pretty);
+    #endif
+
+  }
+
+  arena_scope(ap->curl_arena) {
+    curl_easy_setopt(curl_easy_handle, CURLOPT_URL, "https://api.groq.com/openai/v1/chat/completions");
+    curl_easy_setopt(curl_easy_handle, CURLOPT_WRITEFUNCTION, my_curl_write_callback);
+    curl_easy_setopt(curl_easy_handle, CURLOPT_WRITEDATA, &ap->write_buffer);
+    curl_easy_setopt(curl_easy_handle, CURLOPT_POST, 1L);
+    curl_easy_setopt(curl_easy_handle, CURLOPT_POSTFIELDS,
+      cstr_from_str8(ap->curl_arena, prompt_json)
+    );
+
+    headers = curl_slist_append(headers, "Content-Type: application/json");
+    headers = curl_slist_append(headers, cstrf(ap->curl_arena, "Authorization: Bearer %S", ap->env[ENV_GROQ_API_KEY]));
+
+    curl_easy_setopt(curl_easy_handle, CURLOPT_HTTPHEADER, headers);
+  }
+
+  curl_multi_add_handle(ap->curl_multi_handle, curl_easy_handle);
+
+  curl_multi_perform(ap->curl_multi_handle, (int*)&ap->requests_still_running);
+
+
+  curl_slist_free_all(headers);
+
+}
+
 
 internal void
 func push_groq_model_response_message(App *ap, Str8 groq_response_json) {
@@ -819,10 +1011,16 @@ func app_init(void) {
   ap->main_arena  = arena_create_ex(MB(4), 0, 0);
   ap->frame_arena = arena_create_ex(MB(1), 0, 0);
   ap->temp_arena  = arena_create_ex(MB(1), 0, 0);
+  ap->curl_arena  = arena_create_ex(MB(1), 0, 0);
 
   arr_init_ex(ap->all_messages, ap->main_arena, 1000);
 
-  ap->curl = curl_easy_init();
+  ap->curl_easy_handle = curl_easy_init();
+
+  Curl_write_buffer write_buffer = {
+    .arena = ap->frame_arena,
+  };
+  ap->write_buffer = write_buffer;
 
   ap->env_file = platform_read_entire_file(ap->main_arena, "./env");
   parse_env_file(ap->env_file, ap->env, ENV_VAR_STR, ENV_COUNT);
@@ -845,7 +1043,98 @@ func app_init(void) {
 }
 
 internal void
+func app_update_new(App *ap) {
+
+  if(ap->did_reload) {
+    ap->did_reload = false;
+  }
+
+
+  Groq_message response = arr_last(ap->all_messages);
+
+  if(response.tool_calls.count > 0) {
+
+    exec_tool_calls(ap, response);
+    Groq_message tool_result = arr_last(ap->all_messages);
+    printf("tool call result:\n\n%s\n\n", cstr_from_str8(ap->frame_arena, tool_result.content));
+
+  } else {
+
+    if(ap->model_replied) {
+      ap->model_replied = false;
+      if(response.content.len > 0) {
+        printf("model response:\n\n%s\n\n", cstr_from_str8(ap->frame_arena, response.content));
+      }
+    }
+
+    if(response.flags & GROQ_MESSAGE_FLAG_ERROR) {
+      printf("error:\n\n%s\n\n", cstr_from_str8(ap->frame_arena, response.content));
+    }
+
+    char *line = "hello there, my name is joao";
+
+    if(!line) {
+      ap->flags |= APP_QUIT;
+      return;
+    } else {
+
+      if(ap->say_hello_to_model) {
+        printf("\nhere\n");
+        ap->say_hello_to_model = false;
+        Str8 content = str8_from_cstr(ap->frame_arena, line);
+        push_groq_user_message(ap, content);
+        send_all_messages_to_groq_new(ap);
+
+      }
+
+    }
+
+  }
+
+
+  if(ap->requests_still_running) {
+    curl_multi_perform(ap->curl_multi_handle, (int*)&ap->requests_still_running);
+
+    CURLMsg *curl_message = 0;
+    int messages_left = 0;
+
+    while((curl_message = curl_multi_info_read(ap->curl_multi_handle, &messages_left))) {
+
+      if(curl_message->msg == CURLMSG_DONE) {
+        CURL *finished = curl_message->easy_handle;
+
+        if(curl_message->data.result == CURLE_OK) {
+
+          Str8 curl_response = str8_list_join(ap->frame_arena, ap->write_buffer.chunks, str8_lit(""));
+          platform_write_entire_file(curl_response, "tmp/curl_response.json");
+
+          push_groq_model_response_message(ap, curl_response);
+          ap->model_replied = true;
+          printf("curl command succeeded\n");
+        } else {
+          printf("curl command failed with error: %d\n", curl_message->data.result);
+        }
+
+        curl_multi_remove_handle(ap->curl_multi_handle, finished);
+        curl_easy_cleanup(finished);
+
+      }
+
+    }
+
+  }
+
+  arena_clear(ap->frame_arena);
+
+}
+
+internal void
 func app_update(App *ap) {
+
+  if(ap->did_reload) {
+    ap->did_reload = false;
+  }
+
 
   Groq_message response = arr_last(ap->all_messages);
 
@@ -879,7 +1168,7 @@ func app_update(App *ap) {
 
   }
 
-  send_all_messages_to_groq(ap);
+  // send_all_messages_to_groq(ap);
 
   arena_clear(ap->frame_arena);
 

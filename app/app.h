@@ -133,7 +133,6 @@ TYPEDEF_SLICE(Embedding_vector);
 typedef u64 App_flags;
 #define APP_QUIT              ((App_flags)(1ul << 0))
 
-
 typedef struct App App;
 struct App {
   App_flags flags;
@@ -142,8 +141,16 @@ struct App {
   Arena *main_arena;
   Arena *frame_arena;
   Arena *temp_arena;
+  Arena *curl_arena;
 
-  CURL *curl;
+
+  b32 model_replied;
+
+  b32 say_hello_to_model;
+  Curl_write_buffer write_buffer;
+  CURL  *curl_easy_handle;
+  CURLM *curl_multi_handle;
+  b32 requests_still_running;
 
   Str8 env_file;
   Groq_message_array all_messages;

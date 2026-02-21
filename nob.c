@@ -172,7 +172,7 @@ int linux_build_hotreload_no_cradle(void) {
     "-DBUILD_HOTRELOAD",
     "-DMODULE=\"prompt\"",
     "-o",
-    "prompt.so",
+    "prompt.so.tmp",
     "prompt_hotreload_build.c",
     "-lcurl",
 
@@ -186,6 +186,8 @@ int linux_build_hotreload_no_cradle(void) {
   );
 
   if(!nob_cmd_run_sync(cmd)) return 0;
+
+  nob_rename("prompt.so.tmp", "prompt.so");
 
   return 1;
 }
@@ -213,6 +215,13 @@ int linux_build_hotreload(void) {
     "-o",
     "prompt",
     "hotreload/cradle_linux.c",
+
+    "-lraylib",
+    "-L./third_party/raylib/build/debug/",
+    "-I./third_party/raylib/",
+    "-lraylib",
+    "-Wl,-rpath,./third_party/raylib/build/debug/"
+
     ""
   );
 
